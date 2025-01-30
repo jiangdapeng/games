@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Solar System</title>
+    <style>
+        body { margin: 0; }
+        canvas { display: block; cursor: grab; }
+        canvas:active { cursor: grabbing; }
+    </style>
+</head>
+<body>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // 基准参数
+        const earthBase = {
+            distance: 28,
+            speed: 0.015,
+            radius: 1.3
+        };
+
+        // 天体比例系数（基于实际天文数据简化）
+        const planetRatios = {
+            // 行星名: [轨道半径比例, 公转周期比例, 半径比例]
+            Mercury:  [0.387, 0.2408, 0.38],
+            Venus:    [0.723, 0.6152, 0.95],
+            Earth:    [1.000, 1.0000, 1.00],
+            Mars:     [1.524, 1.8808, 0.53],
+            Jupiter:  [3.203, 11.862, 11.2],
+            Saturn:   [6.537, 29.457, 9.45],
+            Uranus:   [8.19, 84.020, 4.01],
+            Neptune:  [10.07, 164.77, 3.88]
+        };
+
+        // 场景初始化
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // 初始化相机位置（球坐标系）
+        let cameraDistance = 300;
+        let cameraTheta = Math.PI/3; // 垂直角度（0-PI）
+        let cameraPhi = Math.PI/2;   // 水平角度（0-2PI）
+        
+        // 光照
+        const light = new THREE.PointLight(0xffffff, 2, 300);
+        light.position.set(0, 0, 0);
+        scene.add(light);
+
+        // 太阳
+        const sun = new THREE.Mesh(
+            new THREE.SphereGeometry(earthBase.radius * 6, 32, 32),
+            new THREE.MeshBasicMaterial({ color: 0xffff00 })
+        );
+        scene.add(sun);
+
+        // 生成天体参数（同之前代码，此处省略...）
+        // [为节省篇幅，天体生成部分与之前相同，实际需保留完整代码]
+        // 生成天体参数
+        const generatePlanetParams = (name) => {
+            const ratio = planetRatios[name];
+            return {
+                distance: earthBase.distance * ratio[0], // 轨道半径 = 地球基准 × 比例
+                speed: earthBase.speed * (1 / ratio[1]), // 速度 = 地球基准 × (1/周期比例)
+                radius: earthBase.radius * ratio[2]      // 半径 = 地球基准 × 比例
+            };
+        };
+
+        // 天体配置
+        const celestialBodies = [
+            { 
+                name: 'Mercury',
+                color: 0x8B8B7A,
+                ...generatePlanetParams('Mercury')
+            },
+            { 
+                name: 'Venus',
+                color: 0xE6DAA6,
+                ...generatePlanetParams('Venus')
+            },
+            { 
+                name: 'Earth',
+                color: 0x4169E1,
+                ...generatePlanetParams('Earth'),
+                satellites: [
+                    { 
+                        name: 'Moon',
+                        distance: earthBase.radius * 3, // 月球轨道半径基于地球尺寸
+                        radius: earthBase.radius * 0.27,
+                        color: 0x888888,
+                        speed: earthBase.speed * 12     // 月球公转速度（约1/地球周期）
+                    }
+                ]
+            },
+            { 
+                name: 'Mars',
+                color: 0xFF4500,
+                ...generatePlanetParams('Mars')
+            },
+            { 
+                name: 'Jupiter',
+                color: 0xDAA06D,
+                ...generatePlanetParams('Jupiter'),
+                satellites: [
+                    { 
+                        name: 'Ganymede',
+                        distance: earthBase.radius * 15, // 木卫三轨道基于木星尺寸
+                        radius: earthBase.radius * 0.6,
+                        color: 0xCCCCCC,
+                        speed: earthBase.speed * 2.5
+                    }
+                ]
+            },
+            { 
+                name: 'Saturn',
+                color: 0xF4A460,
+                ...generatePlanetParams('Saturn'),
+                rings: {
+                    innerRadius: earthBase.radius * 6,
+                    outerRadius: earthBase.radius * 9,
+                    color: 0xE5E4E2,
+                    tilt: Math.PI/6
+                }
+            },
+            { 
+                name: 'Uranus',
+                color: 0x40E0D0,
+                ...generatePlanetParams('Uranus')
+            },
+            { 
+                name: 'Neptune',
+                color: 0x000080,
+                ...generatePlanetParams('Neptune')
+            }
+        ];
+
+        // 创建轨道线
+        const createOrbitLine = (distance) => {
+            const points = [];
+            for(let i=0; i<=64; i++){
+                const angle = (i/64)*Math.PI*2;
+                points.push(new THREE.Vector3(
+                    Math.cos(angle)*distance,
+                    0,
+                    Math.sin(angle)*distance
+                ));
+            }
+            return new THREE.Line(
+                new THREE.BufferGeometry().setFromPoints(points),
+                new THREE.LineBasicMaterial({ color: 0x444444 })
+            );
+        };
+
+        // 创建天体系统
+        const createBody = (bodyData, parent) => {
+            const orbit = new THREE.Object3D();
+            parent.add(orbit);
+            
+            // 轨道线
+            parent.add(createOrbitLine(bodyData.distance));
+
+            // 行星本体
+            const planet = new THREE.Mesh(
+                new THREE.SphereGeometry(bodyData.radius, 32, 32),
+                new THREE.MeshPhongMaterial({ color: bodyData.color })
+            );
+            planet.position.x = bodyData.distance;
+            orbit.add(planet);
+
+            // 土星环
+            if(bodyData.rings){
+                const ring = new THREE.Mesh(
+                    new THREE.RingGeometry(
+                        bodyData.rings.innerRadius,
+                        bodyData.rings.outerRadius,
+                        64
+                    ),
+                    new THREE.MeshPhongMaterial({
+                        color: bodyData.rings.color,
+                        side: THREE.DoubleSide
+                    })
+                );
+                ring.rotation.x = bodyData.rings.tilt;
+                planet.add(ring);
+            }
+
+            // 卫星系统
+            if(bodyData.satellites){
+                bodyData.satellites.forEach(satellite => {
+                    const satOrbit = new THREE.Object3D();
+                    planet.add(satOrbit);
+                    
+                    const satMesh = new THREE.Mesh(
+                        new THREE.SphereGeometry(satellite.radius, 16, 16),
+                        new THREE.MeshPhongMaterial({ color: satellite.color })
+                    );
+                    satMesh.position.x = satellite.distance;
+                    satOrbit.add(satMesh);
+                    
+                    satOrbit.userData = { speed: satellite.speed };
+                });
+            }
+
+            orbit.userData = { speed: bodyData.speed };
+            return orbit;
+        };
+
+        // 创建所有天体
+        const orbits = [];
+        celestialBodies.forEach(body => {
+            orbits.push(createBody(body, scene));
+        });
+
+        // 相机设置
+        camera.position.set(0, 200, 250);
+        camera.lookAt(0, 0, 0);
+
+    
+        // 窗口适配
+        window.addEventListener('resize', () => {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+        });
+
+        // 鼠标交互参数
+        let isDragging = false;
+        let previousMouse = { x: 0, y: 0 };
+        const rotateSpeed = 0.005;
+
+        // 鼠标事件监听
+        renderer.domElement.addEventListener('mousedown', onMouseDown);
+        renderer.domElement.addEventListener('mousemove', onMouseMove);
+        renderer.domElement.addEventListener('mouseup', onMouseUp);
+        renderer.domElement.addEventListener('wheel', onMouseWheel);
+
+        // 更新相机位置
+        function updateCamera() {
+            camera.position.x = cameraDistance * Math.sin(cameraTheta) * Math.cos(cameraPhi);
+            camera.position.y = cameraDistance * Math.cos(cameraTheta);
+            camera.position.z = cameraDistance * Math.sin(cameraTheta) * Math.sin(cameraPhi);
+            camera.lookAt(scene.position);
+        }
+
+        // 鼠标按下事件
+        function onMouseDown(event) {
+            isDragging = true;
+            previousMouse = {
+                x: event.clientX,
+                y: event.clientY
+            };
+        }
+
+        // 鼠标移动事件
+        function onMouseMove(event) {
+            if (!isDragging) return;
+            
+            const delta = {
+                x: event.clientX - previousMouse.x,
+                y: event.clientY - previousMouse.y
+            };
+
+            // 水平旋转
+            cameraPhi += delta.x * rotateSpeed;
+            
+            // 垂直旋转（限制角度范围）
+            cameraTheta = Math.max(0.1, Math.min(Math.PI/2, cameraTheta - delta.y * rotateSpeed));
+
+            previousMouse = {
+                x: event.clientX,
+                y: event.clientY
+            };
+
+            updateCamera();
+        }
+
+        // 鼠标释放事件
+        function onMouseUp() {
+            isDragging = false;
+        }
+
+        // 滚轮缩放事件
+        function onMouseWheel(event) {
+            cameraDistance = Math.max(100, Math.min(500, cameraDistance - event.deltaY * 0.1));
+            updateCamera();
+        }
+
+        // 初始化相机位置
+        updateCamera();
+
+        // 动画循环（保留原有动画逻辑）
+        function animate() {
+            requestAnimationFrame(animate);
+            orbits.forEach(orbit => {
+                orbit.rotation.y += orbit.userData.speed;
+                orbit.traverse(obj => obj.userData?.speed && (obj.rotation.y += obj.userData.speed));
+            });
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // 窗口适配（同之前代码）
+    </script>
+</body>
+</html>
