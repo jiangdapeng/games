@@ -81,42 +81,7 @@
         
         // 获取当前目录下的HTML文件
         async function fetchHtmlFiles() {
-            try {
-                const response = await fetch(window.location.href, {
-                    headers: {
-                        'Accept': 'application/json'
-                    }
-                });
-                
-                if (!response.ok) {
-                    throw new Error('无法获取目录列表');
-                }
-                
-                const html = await response.text();
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
-                const links = doc.querySelectorAll('a');
-                
-                let files = Array.from(links)
-                    .map(link => link.getAttribute('href'))
-                    .filter(href => 
-                        href && 
-                        !href.startsWith('http') && 
-                        !href.startsWith('/') && 
-                        !href.startsWith('?') && 
-                        !href.startsWith('#') && 
-                        (href.endsWith('.html') || href.endsWith('.htm')) &&
-                        !excludedFiles.includes(href)
-                    )
-                    .map(href => {
-                        // 从文件名中提取游戏名称（去掉.html和-/_等符号）
-                        let name = href.replace('.html', '').replace('.htm', '');
-                        name = name.replace(/[-_]/g, ' ');
-                        name = name.charAt(0).toUpperCase() + name.slice(1);
-                        return { name, href };
-                    });
-                if (files.length === 0) {
-                    files = [
+            return  [
                         {
                             name: "模拟太阳系",
                             href: "solar_system.html"
@@ -130,13 +95,50 @@
                             href: "learn_english.html"
                         }
                         ]
-                }
+            // try {
+            //     const response = await fetch(window.location.href, {
+            //         headers: {
+            //             'Accept': 'application/json'
+            //         }
+            //     });
                 
-                return files;
-            } catch (error) {
-                console.error('获取文件列表出错:', error);
-                return [];
-            }
+            //     if (!response.ok) {
+            //         throw new Error('无法获取目录列表');
+            //     }
+                
+            //     const html = await response.text();
+            //     const parser = new DOMParser();
+            //     const doc = parser.parseFromString(html, 'text/html');
+            //     const links = doc.querySelectorAll('a');
+                
+            //     const files = Array.from(links)
+            //         .map(link => link.getAttribute('href'))
+            //         .filter(href => 
+            //             href && 
+            //             !href.startsWith('http') && 
+            //             !href.startsWith('/') && 
+            //             !href.startsWith('?') && 
+            //             !href.startsWith('#') && 
+            //             (href.endsWith('.html') || href.endsWith('.htm')) &&
+            //             !excludedFiles.includes(href)
+            //         )
+            //         .map(href => {
+            //             // 从文件名中提取游戏名称（去掉.html和-/_等符号）
+            //             let name = href.replace('.html', '').replace('.htm', '');
+            //             name = name.replace(/[-_]/g, ' ');
+            //             name = name.charAt(0).toUpperCase() + name.slice(1);
+            //             return { name, href };
+            //         });
+
+            //     if (files.length === 0) {
+                    
+            //     }
+                
+            //     return files;
+            // } catch (error) {
+            //     console.error('获取文件列表出错:', error);
+            //     return [];
+            // }
         }
         
         // 显示游戏卡片
