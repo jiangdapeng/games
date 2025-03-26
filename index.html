@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小游戏合集</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .games-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        .game-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+            text-align: center;
+            cursor: pointer;
+            text-decoration: none;
+            color: #333;
+        }
+        .game-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .game-card h2 {
+            margin-top: 0;
+            font-size: 1.2em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .search-container {
+            margin: 20px 0;
+            text-align: center;
+        }
+        #search {
+            padding: 10px;
+            width: 100%;
+            max-width: 500px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        .no-results {
+            text-align: center;
+            grid-column: 1 / -1;
+            color: #666;
+            padding: 40px;
+        }
+    </style>
+</head>
+<body>
+    <h1>小游戏合集</h1>
+    
+    <div class="search-container">
+        <input type="text" id="search" placeholder="搜索游戏..." oninput="filterGames()">
+    </div>
+    
+    <div class="games-container" id="games-container">
+        <!-- 游戏卡片将在这里动态生成 -->
+    </div>
+
+    <script>
+        // 排除的文件列表（不需要显示的文件）
+        const excludedFiles = ['index.html', 'favicon.ico'];
+        
+        // 获取当前目录下的HTML文件
+        async function fetchHtmlFiles() {
+            try {
+                const response = await fetch(window.location.href, {
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('无法获取目录列表');
+                }
+                
+                const html = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const links = doc.querySelectorAll('a');
+                
+                const files = Array.from(links)
+                    .map(link => link.getAttribute('href'))
+                    .filter(href => 
+                        href && 
+                        !href.startsWith('http') && 
+                        !href.startsWith('/') && 
+                        !href.startsWith('?') && 
+                        !href.startsWith('#') && 
+                        (href.endsWith('.html') || href.endsWith('.htm')) &&
+                        !excludedFiles.includes(href)
+                    )
+                    .map(href => {
+                        // 从文件名中提取游戏名称（去掉.html和-/_等符号）
+                        let name = href.replace('.html', '').replace('.htm', '');
+                        name = name.replace(/[-_]/g, ' ');
+                        name = name.charAt(0).toUpperCase() + name.slice(1);
+                        return { name, href };
+                    });
+                
+                return files;
+            } catch (error) {
+                console.error('获取文件列表出错:', error);
+                return [];
+            }
+        }
+        
+        // 显示游戏卡片
+        async function displayGames() {
+            const gamesContainer = document.getElementById('games-container');
+            gamesContainer.innerHTML = '<p>正在加载游戏列表...</p>';
+            
+            const games = await fetchHtmlFiles();
+            
+            if (games.length === 0) {
+                gamesContainer.innerHTML = '<div class="no-results">没有找到游戏文件</div>';
+                return;
+            }
+            
+            gamesContainer.innerHTML = '';
+            
+            games.forEach(game => {
+                const card = document.createElement('a');
+                card.className = 'game-card';
+                card.href = game.href;
+                card.innerHTML = `
+                    <h2>${game.name}</h2>
+                    <p>点击开始游戏</p>
+                `;
+                gamesContainer.appendChild(card);
+            });
+        }
+        
+        // 过滤游戏
+        function filterGames() {
+            const searchTerm = document.getElementById('search').value.toLowerCase();
+            const cards = document.querySelectorAll('.game-card');
+            let visibleCount = 0;
+            
+            cards.forEach(card => {
+                const title = card.querySelector('h2').textContent.toLowerCase();
+                if (title.includes(searchTerm)) {
+                    card.style.display = 'block';
+                    visibleCount++;
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+            
+            const noResults = document.querySelector('.no-results');
+            if (visibleCount === 0) {
+                if (!noResults) {
+                    const gamesContainer = document.getElementById('games-container');
+                    const message = document.createElement('div');
+                    message.className = 'no-results';
+                    message.textContent = '没有找到匹配的游戏';
+                    gamesContainer.appendChild(message);
+                }
+            } else if (noResults) {
+                noResults.remove();
+            }
+        }
+        
+        // 页面加载时显示游戏
+        window.onload = displayGames;
+    </script>
+</body>
+</html>
