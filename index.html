@@ -97,7 +97,7 @@
                 const doc = parser.parseFromString(html, 'text/html');
                 const links = doc.querySelectorAll('a');
                 
-                const files = Array.from(links)
+                let files = Array.from(links)
                     .map(link => link.getAttribute('href'))
                     .filter(href => 
                         href && 
@@ -115,19 +115,19 @@
                         name = name.charAt(0).toUpperCase() + name.slice(1);
                         return { name, href };
                     });
-                if files.length == 0 {
+                if (files.length === 0) {
                     files = [
                         {
-                            "name": "模拟太阳系",
-                            "href": "solar_system.html"
+                            name: "模拟太阳系",
+                            href: "solar_system.html"
                         },
                         {
-                            "name": "电子烟花",
-                            "href": "fireworks.html"
+                            name: "电子烟花",
+                            href: "fireworks.html"
                         },
                         {
-                            "name": "学习英语",
-                            "href": "learn_english.html"
+                            name: "学习英语",
+                            href: "learn_english.html"
                         }
                         ]
                 }
