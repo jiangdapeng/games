@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kids English Fun</title>
+    <style>
+        /* 全局样式 - 卡通风格 */
+        :root {
+            --color-primary: #FF9AA2;
+            --color-secondary: #FFB7B2;
+            --color-accent: #FFDAC1;
+            --color-light: #E2F0CB;
+            --color-blue: #B5EAD7;
+            --shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        * {
+            box-sizing: border-box;
+            font-family: 'Comic Sans MS', 'Marker Felt', 'Arial Rounded MT Bold', sans-serif;
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--color-light);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-image: radial-gradient(circle at 10% 20%, var(--color-accent) 0%, var(--color-light) 90%);
+        }
+        
+        header {
+            width: 100%;
+            background-color: var(--color-primary);
+            padding: 15px 0;
+            text-align: center;
+            box-shadow: var(--shadow);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        header::after {
+            content: "";
+            position: absolute;
+            bottom: -20px;
+            left: 0;
+            right: 0;
+            height: 40px;
+            background-color: var(--color-primary);
+            transform: skewY(-3deg);
+            z-index: -1;
+        }
+        
+        h1 {
+            color: white;
+            margin: 0;
+            font-size: 2.5rem;
+            text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.1);
+            letter-spacing: 1px;
+        }
+        
+        .container {
+            width: 90%;
+            max-width: 800px;
+            margin: 20px auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        /* 主题选择按钮 */
+        .theme-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        
+        .theme-btn {
+            background-color: var(--color-blue);
+            border: none;
+            border-radius: 50px;
+            padding: 12px 20px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: var(--shadow);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .theme-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        .theme-btn::after {
+            content: "";
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: rgba(255, 255, 255, 0.1);
+            transform: rotate(30deg);
+            transition: all 0.3s;
+        }
+        
+        .theme-btn:hover::after {
+            left: 100%;
+        }
+        
+        /* 卡片样式 */
+        .card-container {
+            perspective: 1000px;
+            width: 300px;
+            height: 400px;
+            margin: 20px auto;
+        }
+        
+        .card {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.6s;
+            cursor: pointer;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+        
+        .card.flipped {
+            transform: rotateY(180deg);
+        }
+        
+        .card-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            border-radius: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .card-front {
+            background-color: white;
+            background-image: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        }
+        
+        .card-back {
+            background-color: var(--color-accent);
+            transform: rotateY(180deg);
+        }
+        
+        .word-image {
+            width: 200px;
+            height: 200px;
+            object-fit: contain;
+            margin-bottom: 20px;
+            filter: drop-shadow(2px 4px 6px rgba(0, 0, 0, 0.1));
+        }
+        
+        .word-text {
+            font-size: 2.5rem;
+            margin: 10px 0;
+            color: #333;
+        }
+        
+        .translation {
+            font-size: 1.8rem;
+            color: #555;
+            margin-bottom: 15px;
+        }
+        
+        .example {
+            font-size: 1.2rem;
+            color: #666;
+            font-style: italic;
+        }
+        
+        /* 按钮样式 */
+        .btn {
+            background-color: var(--color-primary);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            padding: 12px 25px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            margin: 10px;
+            transition: all 0.3s;
+            box-shadow: var(--shadow);
+            min-width: 120px;
+            text-align: center;
+        }
+        
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+        }
+        
+        .btn:active {
+            transform: translateY(1px);
+        }
+        
+        .btn-sound {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--color-blue);
+            margin-top: 15px;
+        }
+        
+        .btn-sound i {
+            font-size: 1.5rem;
+        }
+        
+        /* 导航控制 */
+        .nav-controls {
+            display: flex;
+            justify-content: center;
+            margin: 20px 0;
+        }
+        
+        /* 进度指示 */
+        .progress {
+            margin: 20px 0;
+            font-size: 1.2rem;
+            color: #555;
+        }
+        
+        /* 测验模式 */
+        .quiz-options {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin: 20px 0;
+            width: 100%;
+            max-width: 500px;
+        }
+        
+        .quiz-option {
+            background-color: white;
+            border: 3px solid var(--color-blue);
+            border-radius: 15px;
+            padding: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+            font-size: 1.2rem;
+        }
+        
+        .quiz-option:hover {
+            background-color: var(--color-blue);
+            transform: scale(1.05);
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 600px) {
+            .card-container {
+                width: 250px;
+                height: 350px;
+            }
+            
+            .word-image {
+                width: 150px;
+                height: 150px;
+            }
+            
+            .word-text {
+                font-size: 2rem;
+            }
+            
+            .quiz-options {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        /* 动画 */
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        
+        .bounce {
+            animation: bounce 1s infinite;
+        }
+        
+        /* 成就通知 */
+        .achievement {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: var(--color-primary);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: var(--shadow);
+            transform: translateX(200%);
+            transition: transform 0.5s;
+            z-index: 100;
+        }
+        
+        .achievement.show {
+            transform: translateX(0);
+        }
+        
+        /* 模式切换 */
+        .mode-toggle {
+            margin: 20px 0;
+            display: flex;
+            justify-content: center;
+        }
+        
+        .mode-btn {
+            background-color: transparent;
+            border: 2px solid var(--color-primary);
+            color: var(--color-primary);
+            margin: 0 5px;
+        }
+        
+        .mode-btn.active {
+            background-color: var(--color-primary);
+            color: white;
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <header>
+        <h1>Kids English Fun</h1>
+    </header>
+    
+    <div class="container">
+        <div class="theme-buttons">
+            <button class="theme-btn" data-theme="animals">Animals</button>
+            <button class="theme-btn" data-theme="food">Food</button>
+            <button class="theme-btn" data-theme="colors">Colors</button>
+            <button class="theme-btn" data-theme="numbers">Numbers</button>
+        </div>
+        
+        <div class="mode-toggle">
+            <button class="btn mode-btn active" data-mode="learn">Learn</button>
+            <button class="btn mode-btn" data-mode="quiz">Quiz</button>
+        </div>
+        
+        <div class="progress">
+            Word <span id="current-word">1</span> of <span id="total-words">10</span>
+        </div>
+        
+        <!-- 学习模式 -->
+        <div id="learn-mode">
+            <div class="card-container">
+                <div class="card" id="card">
+                    <div class="card-face card-front">
+                        <img class="word-image" id="word-image" src="" alt="Word image">
+                        <div class="word-text" id="word-text">Word</div>
+                        <button class="btn btn-sound" id="sound-btn">
+                            <i class="fas fa-volume-up"></i>
+                        </button>
+                    </div>
+                    <div class="card-face card-back">
+                        <div class="translation" id="translation">Translation</div>
+                        <div class="example" id="example">Example sentence</div>
+                        <button class="btn btn-sound" id="sound-btn-back">
+                            <i class="fas fa-volume-up"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="nav-controls">
+                <button class="btn" id="prev-btn"><i class="fas fa-arrow-left"></i> Previous</button>
+                <button class="btn" id="next-btn">Next <i class="fas fa-arrow-right"></i></button>
+            </div>
+        </div>
+        
+        <!-- 测验模式 -->
+        <div id="quiz-mode" style="display: none;">
+            <div class="card-container">
+                <div class="card">
+                    <div class="card-face card-front">
+                        <img class="word-image" id="quiz-image" src="" alt="Quiz image">
+                        <button class="btn btn-sound" id="quiz-sound-btn">
+                            <i class="fas fa-volume-up"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="quiz-options" id="quiz-options">
+                <!-- 选项将通过JavaScript动态生成 -->
+            </div>
+            
+            <div class="nav-controls">
+                <button class="btn" id="check-answer-btn" disabled>Check Answer</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="achievement" id="achievement">
+        <div id="achievement-text">Great Job!</div>
+    </div>
+    
+    <script>
+        // 单词数据库
+        const wordDatabase = {
+            animals: [
+                {
+                    word: "cat",
+                    translation: "猫",
+                    image: "https://cdn.pixabay.com/photo/2017/02/20/18/03/cat-2083492_960_720.jpg",
+                    example: "The cat is sleeping.",
+                    audio: "https://www.soundjay.com/meow/sounds/meow-01.mp3"
+                },
+                {
+                    word: "dog",
+                    translation: "狗",
+                    image: "https://cdn.pixabay.com/photo/2016/12/13/05/15/puppy-1903313_960_720.jpg",
+                    example: "The dog is playing.",
+                    audio: "https://www.soundjay.com/dog/sounds/dog-bark-01.mp3"
+                },
+                {
+                    word: "elephant",
+                    translation: "大象",
+                    image: "https://cdn.pixabay.com/photo/2016/11/14/04/45/elephant-1822636_960_720.jpg",
+                    example: "The elephant is big.",
+                    audio: "https://www.soundjay.com/animal/sounds/elephant-01.mp3"
+                },
+                {
+                    word: "lion",
+                    translation: "狮子",
+                    image: "https://cdn.pixabay.com/photo/2017/10/25/16/54/lion-2888519_960_720.jpg",
+                    example: "The lion is the king.",
+                    audio: "https://www.soundjay.com/animal/sounds/lion-01.mp3"
+                },
+                {
+                    word: "monkey",
+                    translation: "猴子",
+                    image: "https://cdn.pixabay.com/photo/2017/09/07/21/42/monkey-2726897_960_720.jpg",
+                    example: "The monkey is climbing.",
+                    audio: "https://www.soundjay.com/animal/sounds/monkey-01.mp3"
+                }
+            ],
+            food: [
+                {
+                    word: "apple",
+                    translation: "苹果",
+                    image: "https://cdn.pixabay.com/photo/2016/01/05/13/58/apple-1122537_960_720.jpg",
+                    example: "I eat an apple.",
+                    audio: "https://www.soundjay.com/human/sounds/apple-crunch-01.mp3"
+                },
+                {
+                    word: "banana",
+                    translation: "香蕉",
+                    image: "https://cdn.pixabay.com/photo/2017/06/27/22/21/banana-2449019_960_720.jpg",
+                    example: "The banana is yellow.",
+                    audio: "https://www.soundjay.com/human/sounds/banana-peel-01.mp3"
+                },
+                {
+                    word: "orange",
+                    translation: "橙子",
+                    image: "https://cdn.pixabay.com/photo/2017/01/20/15/06/oranges-1995056_960_720.jpg",
+                    example: "The orange is juicy.",
+                    audio: "https://www.soundjay.com/human/sounds/orange-squeeze-01.mp3"
+                }
+            ],
+            colors: [
+                {
+                    word: "red",
+                    translation: "红色",
+                    image: "https://cdn.pixabay.com/photo/2017/01/10/03/06/red-1968806_960_720.jpg",
+                    example: "The apple is red.",
+                    audio: "https://www.soundjay.com/buttons/sounds/button-09.mp3"
+                },
+                {
+                    word: "blue",
+                    translation: "蓝色",
+                    image: "https://cdn.pixabay.com/photo/2017/01/10/03/12/blue-1968839_960_720.jpg",
+                    example: "The sky is blue.",
+                    audio: "https://www.soundjay.com/buttons/sounds/button-09.mp3"
+                },
+                {
+                    word: "yellow",
+                    translation: "黄色",
+                    image: "https://cdn.pixabay.com/photo/2017/01/10/03/12/yellow-1968840_960_720.jpg",
+                    example: "The sun is yellow.",
+                    audio: "https://www.soundjay.com/buttons/sounds/button-09.mp3"
+                }
+            ],
+            numbers: [
+                {
+                    word: "one",
+                    translation: "一",
+                    image: "https://cdn.pixabay.com/photo/2016/04/01/10/04/amusing-1300046_960_720.png",
+                    example: "I have one apple.",
+                    audio: "https://www.soundjay.com/buttons/sounds/button-21.mp3"
+                },
+                {
+                    word: "two",
+                    translation: "二",
+                    image: "https://cdn.pixabay.com/photo/2016/04/01/10/11/amusing-1300053_960_720.png",
+                    example: "I see two cats.",
+                    audio: "https://www.soundjay.com/buttons/sounds/button-21.mp3"
+                },
+                {
+                    word: "three",
+                    translation: "三",
+                    image: "https://cdn.pixabay.com/photo/2016/04/01/10/10/amusing-1300052_960_720.png",
+                    example: "There are three dogs.",
+                    audio: "https://www.soundjay.com/buttons/sounds/button-21.mp3"
+                }
+            ]
+        };
+        
+        // 应用状态
+        let currentTheme = 'animals';
+        let currentWords = [];
+        let currentIndex = 0;
+        let currentMode = 'learn';
+        let correctAnswers = 0;
+        let quizCorrectAnswer = '';
+        
+        // DOM元素
+        const card = document.getElementById('card');
+        const wordImage = document.getElementById('word-image');
+        const wordText = document.getElementById('word-text');
+        const translation = document.getElementById('translation');
+        const example = document.getElementById('example');
+        const soundBtn = document.getElementById('sound-btn');
+        const soundBtnBack = document.getElementById('sound-btn-back');
+        const prevBtn = document.getElementById('prev-btn');
+        const nextBtn = document.getElementById('next-btn');
+        const currentWordSpan = document.getElementById('current-word');
+        const totalWordsSpan = document.getElementById('total-words');
+        const themeButtons = document.querySelectorAll('.theme-btn');
+        const modeButtons = document.querySelectorAll('.mode-btn');
+        const learnMode = document.getElementById('learn-mode');
+        const quizMode = document.getElementById('quiz-mode');
+        const quizImage = document.getElementById('quiz-image');
+        const quizSoundBtn = document.getElementById('quiz-sound-btn');
+        const quizOptions = document.getElementById('quiz-options');
+        const checkAnswerBtn = document.getElementById('check-answer-btn');
+        const achievement = document.getElementById('achievement');
+        const achievementText = document.getElementById('achievement-text');
+        
+        // 音频对象
+        const audio = new Audio();
+        
+        // 初始化应用
+        function initApp() {
+            loadTheme(currentTheme);
+            setupEventListeners();
+        }
+        
+        // 加载主题单词
+        function loadTheme(theme) {
+            currentTheme = theme;
+            currentWords = [...wordDatabase[theme]];
+            currentIndex = 0;
+            updateWordDisplay();
+            updateProgress();
+        }
+        
+        // 更新单词显示
+        function updateWordDisplay() {
+            const currentWord = currentWords[currentIndex];
+            
+            if (currentMode === 'learn') {
+                wordImage.src = currentWord.image;
+                wordText.textContent = currentWord.word;
+                translation.textContent = currentWord.translation;
+                example.textContent = currentWord.example;
+                
+                // 重置卡片状态
+                if (card.classList.contains('flipped')) {
+                    card.classList.remove('flipped');
+                }
+            } else {
+                // 测验模式
+                quizImage.src = currentWord.image;
+                generateQuizOptions();
+            }
+        }
+        
+        // 更新进度显示
+        function updateProgress() {
+            currentWordSpan.textContent = currentIndex + 1;
+            totalWordsSpan.textContent = currentWords.length;
+        }
+        
+        // 播放单词发音
+        function playWordAudio() {
+            const currentWord = currentWords[currentIndex];
+            audio.src = currentWord.audio;
+            audio.play().catch(e => console.log("Audio play failed:", e));
+        }
+        
+        // 生成测验选项
+        function generateQuizOptions() {
+            quizOptions.innerHTML = '';
+            const currentWord = currentWords[currentIndex];
+            quizCorrectAnswer = currentWord.word;
+            
+            // 获取3个错误选项
+            let options = [currentWord.word];
+            let allWords = currentWords.map(w => w.word);
+            allWords = allWords.filter(w => w !== currentWord.word);
+            
+            while (options.length < 4 && allWords.length > 0) {
+                const randomIndex = Math.floor(Math.random() * allWords.length);
+                options.push(allWords[randomIndex]);
+                allWords.splice(randomIndex, 1);
+            }
+            
+            // 打乱选项顺序
+            options = shuffleArray(options);
+            
+            // 创建选项按钮
+            options.forEach(option => {
+                const optionBtn = document.createElement('div');
+                optionBtn.className = 'quiz-option';
+                optionBtn.textContent = option;
+                optionBtn.addEventListener('click', () => selectQuizOption(optionBtn, option));
+                quizOptions.appendChild(optionBtn);
+            });
+            
+            // 重置检查答案按钮
+            checkAnswerBtn.disabled = true;
+            checkAnswerBtn.textContent = "Check Answer";
+        }
+        
+        // 选择测验选项
+        function selectQuizOption(optionBtn, option) {
+            // 移除所有选项的选中状态
+            document.querySelectorAll('.quiz-option').forEach(btn => {
+                btn.style.backgroundColor = 'white';
+                btn.style.borderColor = 'var(--color-blue)';
+            });
+            
+            // 设置当前选项为选中状态
+            optionBtn.style.backgroundColor = 'var(--color-blue)';
+            optionBtn.style.borderColor = 'var(--color-primary)';
+            
+            // 启用检查答案按钮
+            checkAnswerBtn.disabled = false;
+            checkAnswerBtn.dataset.selected = option;
+        }
+        
+        // 检查测验答案
+        function checkQuizAnswer() {
+            const selectedAnswer = checkAnswerBtn.dataset.selected;
+            const optionButtons = document.querySelectorAll('.quiz-option');
+            
+            optionButtons.forEach(btn => {
+                btn.style.pointerEvents = 'none'; // 禁用进一步点击
+                
+                if (btn.textContent === quizCorrectAnswer) {
+                    btn.style.backgroundColor = '#a5d6a7'; // 绿色表示正确
+                    btn.style.borderColor = '#4caf50';
+                } else if (btn.textContent === selectedAnswer && selectedAnswer !== quizCorrectAnswer) {
+                    btn.style.backgroundColor = '#ef9a9a'; // 红色表示错误
+                    btn.style.borderColor = '#f44336';
+                }
+            });
+            
+            if (selectedAnswer === quizCorrectAnswer) {
+                checkAnswerBtn.textContent = "Correct!";
+                correctAnswers++;
+                
+                // 显示成就通知
+                if (correctAnswers % 3 === 0) {
+                    showAchievement(`Great! ${correctAnswers} correct answers!`);
+                }
+            } else {
+                checkAnswerBtn.textContent = "Try Again";
+            }
+            
+            // 2秒后自动进入下一个单词
+            setTimeout(() => {
+                nextWord();
+            }, 2000);
+        }
+        
+        // 显示成就通知
+        function showAchievement(text) {
+            achievementText.textContent = text;
+            achievement.classList.add('show');
+            
+            setTimeout(() => {
+                achievement.classList.remove('show');
+            }, 3000);
+        }
+        
+        // 下一个单词
+        function nextWord() {
+            if (currentIndex < currentWords.length - 1) {
+                currentIndex++;
+            } else {
+                currentIndex = 0;
+                showAchievement("Completed! Starting over.");
+            }
+            
+            updateWordDisplay();
+            updateProgress();
+        }
+        
+        // 上一个单词
+        function prevWord() {
+            if (currentIndex > 0) {
+                currentIndex--;
+            } else {
+                currentIndex = currentWords.length - 1;
+            }
+            
+            updateWordDisplay();
+            updateProgress();
+        }
+        
+        // 切换学习/测验模式
+        function switchMode(mode) {
+            currentMode = mode;
+            
+            if (mode === 'learn') {
+                learnMode.style.display = 'block';
+                quizMode.style.display = 'none';
+            } else {
+                learnMode.style.display = 'none';
+                quizMode.style.display = 'block';
+                correctAnswers = 0;
+            }
+            
+            // 更新活动按钮样式
+            modeButtons.forEach(btn => {
+                if (btn.dataset.mode === mode) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+            
+            updateWordDisplay();
+        }
+        
+        // 设置事件监听器
+        function setupEventListeners() {
+            // 卡片点击翻转
+            card.addEventListener('click', () => {
+                card.classList.toggle('flipped');
+            });
+            
+            // 发音按钮
+            soundBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                playWordAudio();
+            });
+            
+            soundBtnBack.addEventListener('click', (e) => {
+                e.stopPropagation();
+                playWordAudio();
+            });
+            
+            quizSoundBtn.addEventListener('click', () => {
+                playWordAudio();
+            });
+            
+            // 导航按钮
+            prevBtn.addEventListener('click', prevWord);
+            nextBtn.addEventListener('click', nextWord);
+            
+            // 主题按钮
+            themeButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    loadTheme(btn.dataset.theme);
+                });
+            });
+            
+            // 模式切换按钮
+            modeButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    switchMode(btn.dataset.mode);
+                });
+            });
+            
+            // 检查答案按钮
+            checkAnswerBtn.addEventListener('click', checkQuizAnswer);
+            
+            // 键盘导航
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowLeft') {
+                    prevWord();
+                } else if (e.key === 'ArrowRight') {
+                    nextWord();
+                } else if (e.key === ' ') {
+                    if (currentMode === 'learn') {
+                        card.classList.toggle('flipped');
+                    }
+                }
+            });
+        }
+        
+        // 辅助函数：打乱数组
+        function shuffleArray(array) {
+            const newArray = [...array];
+            for (let i = newArray.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+            }
+            return newArray;
+        }
+        
+        // 启动应用
+        initApp();
+    </script>
+</body>
+</html>
