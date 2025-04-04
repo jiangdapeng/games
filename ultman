@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>奥特曼打怪兽</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #0a0a2a;
+            color: white;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+            overflow: hidden;
+        }
+        
+        #game-container {
+            width: 800px;
+            height: 500px;
+            margin: 0 auto;
+            position: relative;
+            background-image: url('https://img.freepik.com/free-vector/starry-night-sky-with-shining-stars_107791-7392.jpg');
+            background-size: cover;
+            border: 3px solid #ffcc00;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        #ultraman {
+            width: 100px;
+            height: 150px;
+            position: absolute;
+            bottom: 20px;
+            left: 50px;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 150"><circle cx="50" cy="40" r="30" fill="%23ff0000"/><rect x="35" y="70" width="30" height="60" fill="%23ff0000"/><rect x="20" y="80" width="15" height="40" fill="%23ff0000"/><rect x="65" y="80" width="15" height="40" fill="%23ff0000"/><circle cx="40" cy="35" r="5" fill="%23ffffff"/><circle cx="60" cy="35" r="5" fill="%23ffffff"/><path d="M45,50 Q50,55 55,50" stroke="%23ffffff" fill="transparent" stroke-width="2"/></svg>');
+            background-size: contain;
+            background-repeat: no-repeat;
+            transition: transform 0.1s;
+        }
+        
+        .monster {
+            width: 80px;
+            height: 100px;
+            position: absolute;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 100"><circle cx="40" cy="30" r="25" fill="%2333cc33"/><rect x="20" y="55" width="40" height="45" fill="%2333cc33"/><rect x="5" y="65" width="15" height="30" fill="%2333cc33"/><rect x="60" y="65" width="15" height="30" fill="%2333cc33"/><circle cx="30" cy="25" r="5" fill="%23ffffff"/><circle cx="50" cy="25" r="5" fill="%23ffffff"/><path d="M35,40 Q40,45 45,40" stroke="%23ffffff" fill="transparent" stroke-width="2"/></svg>');
+            background-size: contain;
+            background-repeat: no-repeat;
+        }
+        
+        .beam {
+            width: 30px;
+            height: 10px;
+            position: absolute;
+            background-color: #00ffff;
+            border-radius: 5px;
+            box-shadow: 0 0 10px #00ffff;
+        }
+        
+        #score-display {
+            font-size: 24px;
+            margin: 10px 0;
+            color: #ffcc00;
+        }
+        
+        #controls {
+            margin: 20px 0;
+        }
+        
+        button {
+            background-color: #ff3333;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 0 10px;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover {
+            background-color: #ff0000;
+        }
+        
+        #game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            display: none;
+        }
+        
+        #game-over h2 {
+            color: #ff3333;
+        }
+    </style>
+</head>
+<body>
+    <h1>奥特曼打怪兽</h1>
+    <div id="score-display">得分: 0</div>
+    <div id="game-container">
+        <div id="ultraman"></div>
+        <div id="game-over">
+            <h2>游戏结束!</h2>
+            <p>最终得分: <span id="final-score">0</span></p>
+            <button onclick="startGame()">重新开始</button>
+        </div>
+    </div>
+    <div id="controls">
+        <button onclick="startGame()">开始游戏</button>
+        <button onclick="pauseGame()">暂停</button>
+    </div>
+    <p>使用键盘方向键移动奥特曼，空格键发射光线</p>
+
+    <script>
+        // 游戏变量
+        let score = 0;
+        let gameRunning = false;
+        let monsters = [];
+        let beams = [];
+        let ultramanY = 0;
+        let ultramanSpeed = 0;
+        let gravity = 0.5;
+        let jumpForce = -12;
+        let isJumping = false;
+        let monsterInterval;
+        let gameLoop;
+        
+        const gameContainer = document.getElementById('game-container');
+        const ultraman = document.getElementById('ultraman');
+        const scoreDisplay = document.getElementById('score-display');
+        const gameOverScreen = document.getElementById('game-over');
+        const finalScoreDisplay = document.getElementById('final-score');
+        
+        // 初始化游戏
+        function initGame() {
+            score = 0;
+            monsters.forEach(monster => monster.remove());
+            beams.forEach(beam => beam.remove());
+            monsters = [];
+            beams = [];
+            ultraman.style.bottom = '20px';
+            ultraman.style.left = '50px';
+            ultramanY = 0;
+            ultramanSpeed = 0;
+            isJumping = false;
+            scoreDisplay.textContent = '得分: 0';
+            gameOverScreen.style.display = 'none';
+        }
+        
+        // 开始游戏
+        function startGame() {
+            if (gameRunning) return;
+            
+            initGame();
+            gameRunning = true;
+            
+            // 生成怪兽
+            monsterInterval = setInterval(createMonster, 2000);
+            
+            // 游戏主循环
+            gameLoop = setInterval(updateGame, 20);
+            
+            // 重置按键状态
+            keysPressed = {
+                ArrowLeft: false,
+                ArrowRight: false,
+                ArrowUp: false,
+                ' ': false
+            };
+        }
+        
+        // 暂停游戏
+        function pauseGame() {
+            if (!gameRunning) return;
+            
+            clearInterval(monsterInterval);
+            clearInterval(gameLoop);
+            gameRunning = false;
+        }
+        
+        // 游戏结束
+        function gameOver() {
+            pauseGame();
+            finalScoreDisplay.textContent = score;
+            gameOverScreen.style.display = 'block';
+        }
+        
+        // 创建怪兽
+        function createMonster() {
+            if (!gameRunning) return;
+            
+            const monster = document.createElement('div');
+            monster.className = 'monster';
+            monster.style.right = '0px';
+            monster.style.top = Math.random() * 300 + 'px';
+            gameContainer.appendChild(monster);
+            monsters.push(monster);
+        }
+        
+        // 创建光线
+        function createBeam() {
+            if (!gameRunning) return;
+            
+            const beam = document.createElement('div');
+            beam.className = 'beam';
+            const ultramanRect = ultraman.getBoundingClientRect();
+            const gameRect = gameContainer.getBoundingClientRect();
+            
+            beam.style.left = (ultramanRect.left - gameRect.left + 100) + 'px';
+            beam.style.top = (ultramanRect.top - gameRect.top + 70) + 'px';
+            gameContainer.appendChild(beam);
+            beams.push(beam);
+        }
+        
+        // 更新游戏状态
+        function updateGame() {
+            // 更新奥特曼位置
+            updateUltraman();
+            
+            // 更新怪兽位置
+            updateMonsters();
+            
+            // 更新光线位置
+            updateBeams();
+            
+            // 检测碰撞
+            checkCollisions();
+        }
+        
+        // 更新奥特曼位置
+        function updateUltraman() {
+            // 水平移动
+            let ultramanLeft = parseInt(ultraman.style.left) || 50;
+            
+            if (keysPressed.ArrowLeft && ultramanLeft > 0) {
+                ultraman.style.left = (ultramanLeft - 5) + 'px';
+                ultraman.style.transform = 'scaleX(-1)';
+            }
+            if (keysPressed.ArrowRight && ultramanLeft < gameContainer.offsetWidth - 100) {
+                ultraman.style.left = (ultramanLeft + 5) + 'px';
+                ultraman.style.transform = 'scaleX(1)';
+            }
+            
+            // 跳跃
+            if (keysPressed.ArrowUp && !isJumping) {
+                ultramanSpeed = jumpForce;
+                isJumping = true;
+            }
+            
+            // 应用重力
+            ultramanSpeed += gravity;
+            ultramanY += ultramanSpeed;
+            
+            // 限制在地面上
+            const ground = 20;
+            if (ultramanY > 0) {
+                ultramanY = 0;
+                ultramanSpeed = 0;
+                isJumping = false;
+            }
+            
+            ultraman.style.bottom = (ground - ultramanY) + 'px';
+            
+            // 发射光线
+            if (keysPressed[' '] && beams.length < 3 && Date.now() - (lastBeamTime || 0) > 500) {
+                createBeam();
+                lastBeamTime = Date.now();
+            }
+        }
+        
+        // 更新怪兽位置
+        function updateMonsters() {
+            monsters.forEach((monster, index) => {
+                const currentRight = parseInt(monster.style.right) || 0;
+                monster.style.right = (currentRight + 3) + 'px';
+                
+                // 移除超出屏幕的怪兽
+                if (currentRight > gameContainer.offsetWidth) {
+                    monster.remove();
+                    monsters.splice(index, 1);
+                    score += 10;
+                    scoreDisplay.textContent = '得分: ' + score;
+                }
+            });
+        }
+        
+        // 更新光线位置
+        function updateBeams() {
+            beams.forEach((beam, index) => {
+                const currentLeft = parseInt(beam.style.left) || 0;
+                beam.style.left = (currentLeft + 10) + 'px';
+                
+                // 移除超出屏幕的光线
+                if (currentLeft > gameContainer.offsetWidth) {
+                    beam.remove();
+                    beams.splice(index, 1);
+                }
+            });
+        }
+        
+        // 检测碰撞
+        function checkCollisions() {
+            const ultramanRect = ultraman.getBoundingClientRect();
+            const gameRect = gameContainer.getBoundingClientRect();
+            
+            // 奥特曼与怪兽碰撞
+            monsters.forEach(monster => {
+                const monsterRect = monster.getBoundingClientRect();
+                
+                if (isColliding(ultramanRect, monsterRect)) {
+                    gameOver();
+                }
+            });
+            
+            // 光线与怪兽碰撞
+            beams.forEach((beam, beamIndex) => {
+                const beamRect = beam.getBoundingClientRect();
+                
+                monsters.forEach((monster, monsterIndex) => {
+                    const monsterRect = monster.getBoundingClientRect();
+                    
+                    if (isColliding(beamRect, monsterRect)) {
+                        // 移除光线和怪兽
+                        beam.remove();
+                        monster.remove();
+                        beams.splice(beamIndex, 1);
+                        monsters.splice(monsterIndex, 1);
+                        
+                        // 增加分数
+                        score += 20;
+                        scoreDisplay.textContent = '得分: ' + score;
+                    }
+                });
+            });
+        }
+        
+        // 碰撞检测辅助函数
+        function isColliding(rect1, rect2) {
+            return !(
+                rect1.right < rect2.left || 
+                rect1.left > rect2.right || 
+                rect1.bottom < rect2.top || 
+                rect1.top > rect2.bottom
+            );
+        }
+        
+        // 键盘控制
+        let keysPressed = {};
+        let lastBeamTime = 0;
+        
+        document.addEventListener('keydown', (e) => {
+            if (['ArrowLeft', 'ArrowRight', 'ArrowUp', ' '].includes(e.key)) {
+                keysPressed[e.key] = true;
+                e.preventDefault();
+            }
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            if (['ArrowLeft', 'ArrowRight', 'ArrowUp', ' '].includes(e.key)) {
+                keysPressed[e.key] = false;
+                e.preventDefault();
+            }
+        });
+        
+        // 触摸控制 (移动设备)
+        let touchStartX = 0;
+        
+        gameContainer.addEventListener('touchstart', (e) => {
+            touchStartX = e.touches[0].clientX;
+            keysPressed.ArrowUp = true; // 跳跃
+            e.preventDefault();
+        });
+        
+        gameContainer.addEventListener('touchmove', (e) => {
+            const touchX = e.touches[0].clientX;
+            if (touchX < touchStartX - 10) {
+                keysPressed.ArrowLeft = true;
+                keysPressed.ArrowRight = false;
+            } else if (touchX > touchStartX + 10) {
+                keysPressed.ArrowRight = true;
+                keysPressed.ArrowLeft = false;
+            }
+            e.preventDefault();
+        });
+        
+        gameContainer.addEventListener('touchend', (e) => {
+            keysPressed.ArrowLeft = false;
+            keysPressed.ArrowRight = false;
+            keysPressed.ArrowUp = false;
+            e.preventDefault();
+        });
+        
+        // 发射按钮 (移动设备)
+        document.querySelector('#controls').addEventListener('click', (e) => {
+            if (e.target.tagName === 'BUTTON' && e.target.textContent === '发射') {
+                keysPressed[' '] = true;
+                setTimeout(() => { keysPressed[' '] = false; }, 100);
+            }
+        });
+    </script>
+</body>
+</html>
