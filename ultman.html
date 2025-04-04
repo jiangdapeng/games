@@ -2,22 +2,37 @@
 <html lang="zh">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>奥特曼打怪兽</title>
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            touch-action: manipulation;
+        }
+        
         body {
             font-family: 'Arial', sans-serif;
             background-color: #0a0a2a;
             color: white;
             text-align: center;
-            margin: 0;
-            padding: 20px;
             overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        h1 {
+            font-size: 24px;
+            padding: 10px 0;
+            color: #ffcc00;
         }
         
         #game-container {
-            width: 800px;
-            height: 500px;
+            flex: 1;
+            width: 100%;
+            max-width: 500px;
             margin: 0 auto;
             position: relative;
             background-image: url('https://img.freepik.com/free-vector/starry-night-sky-with-shining-stars_107791-7392.jpg');
@@ -28,43 +43,49 @@
         }
         
         #ultraman {
-            width: 100px;
-            height: 150px;
+            width: 60px;
+            height: 90px;
             position: absolute;
             bottom: 20px;
             left: 50px;
-            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 150"><circle cx="50" cy="40" r="30" fill="%23ff0000"/><rect x="35" y="70" width="30" height="60" fill="%23ff0000"/><rect x="20" y="80" width="15" height="40" fill="%23ff0000"/><rect x="65" y="80" width="15" height="40" fill="%23ff0000"/><circle cx="40" cy="35" r="5" fill="%23ffffff"/><circle cx="60" cy="35" r="5" fill="%23ffffff"/><path d="M45,50 Q50,55 55,50" stroke="%23ffffff" fill="transparent" stroke-width="2"/></svg>');
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 90"><circle cx="30" cy="25" r="18" fill="%23ff0000"/><rect x="20" y="43" width="20" height="37" fill="%23ff0000"/><rect x="10" y="48" width="10" height="25" fill="%23ff0000"/><rect x="40" y="48" width="10" height="25" fill="%23ff0000"/><circle cx="25" cy="22" r="3" fill="%23ffffff"/><circle cx="35" cy="22" r="3" fill="%23ffffff"/><path d="M28,32 Q30,35 32,32" stroke="%23ffffff" fill="transparent" stroke-width="1.5"/></svg>');
             background-size: contain;
             background-repeat: no-repeat;
             transition: transform 0.1s;
+            z-index: 10;
         }
         
         .monster {
-            width: 80px;
-            height: 100px;
+            width: 50px;
+            height: 65px;
             position: absolute;
-            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 100"><circle cx="40" cy="30" r="25" fill="%2333cc33"/><rect x="20" y="55" width="40" height="45" fill="%2333cc33"/><rect x="5" y="65" width="15" height="30" fill="%2333cc33"/><rect x="60" y="65" width="15" height="30" fill="%2333cc33"/><circle cx="30" cy="25" r="5" fill="%23ffffff"/><circle cx="50" cy="25" r="5" fill="%23ffffff"/><path d="M35,40 Q40,45 45,40" stroke="%23ffffff" fill="transparent" stroke-width="2"/></svg>');
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 65"><circle cx="25" cy="20" r="15" fill="%2333cc33"/><rect x="15" y="35" width="20" height="30" fill="%2333cc33"/><rect x="5" y="40" width="10" height="20" fill="%2333cc33"/><rect x="35" y="40" width="10" height="20" fill="%2333cc33"/><circle cx="20" cy="18" r="3" fill="%23ffffff"/><circle cx="30" cy="18" r="3" fill="%23ffffff"/><path d="M23,27 Q25,30 27,27" stroke="%23ffffff" fill="transparent" stroke-width="1.5"/></svg>');
             background-size: contain;
             background-repeat: no-repeat;
+            z-index: 5;
         }
         
         .beam {
-            width: 30px;
-            height: 10px;
+            width: 20px;
+            height: 5px;
             position: absolute;
             background-color: #00ffff;
-            border-radius: 5px;
-            box-shadow: 0 0 10px #00ffff;
+            border-radius: 3px;
+            box-shadow: 0 0 5px #00ffff;
+            z-index: 8;
         }
         
         #score-display {
-            font-size: 24px;
-            margin: 10px 0;
+            font-size: 20px;
+            margin: 5px 0;
             color: #ffcc00;
         }
         
         #controls {
-            margin: 20px 0;
+            display: flex;
+            justify-content: center;
+            padding: 10px;
+            gap: 15px;
         }
         
         button {
@@ -72,11 +93,11 @@
             color: white;
             border: none;
             padding: 10px 20px;
-            margin: 0 10px;
             border-radius: 5px;
             font-size: 16px;
             cursor: pointer;
             transition: background-color 0.3s;
+            min-width: 80px;
         }
         
         button:hover {
@@ -85,17 +106,96 @@
         
         #game-over {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
             background-color: rgba(0, 0, 0, 0.8);
-            padding: 20px;
-            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
             display: none;
         }
         
         #game-over h2 {
             color: #ff3333;
+            font-size: 24px;
+            margin-bottom: 15px;
+        }
+        
+        #game-over p {
+            font-size: 18px;
+            margin-bottom: 20px;
+        }
+        
+        #touch-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 20px;
+            z-index: 15;
+        }
+        
+        .touch-btn {
+            width: 60px;
+            height: 60px;
+            background-color: rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 24px;
+            user-select: none;
+        }
+        
+        #jump-btn {
+            position: absolute;
+            right: 20px;
+            bottom: 90px;
+        }
+        
+        #shoot-btn {
+            position: absolute;
+            right: 20px;
+            bottom: 20px;
+        }
+        
+        @media (max-width: 400px) {
+            #ultraman {
+                width: 50px;
+                height: 75px;
+            }
+            
+            .monster {
+                width: 40px;
+                height: 55px;
+            }
+            
+            #touch-controls {
+                padding: 0 10px;
+            }
+            
+            .touch-btn {
+                width: 50px;
+                height: 50px;
+                font-size: 20px;
+            }
+            
+            #jump-btn {
+                right: 10px;
+                bottom: 70px;
+            }
+            
+            #shoot-btn {
+                right: 10px;
+                bottom: 10px;
+            }
         }
     </style>
 </head>
@@ -109,12 +209,19 @@
             <p>最终得分: <span id="final-score">0</span></p>
             <button onclick="startGame()">重新开始</button>
         </div>
+        
+        <!-- 触摸控制按钮 -->
+        <div id="touch-controls">
+            <div class="touch-btn" id="left-btn">←</div>
+            <div class="touch-btn" id="right-btn">→</div>
+        </div>
+        <div class="touch-btn" id="jump-btn">↑</div>
+        <div class="touch-btn" id="shoot-btn">⚡</div>
     </div>
     <div id="controls">
         <button onclick="startGame()">开始游戏</button>
         <button onclick="pauseGame()">暂停</button>
     </div>
-    <p>使用键盘方向键移动奥特曼，空格键发射光线</p>
 
     <script>
         // 游戏变量
@@ -124,17 +231,24 @@
         let beams = [];
         let ultramanY = 0;
         let ultramanSpeed = 0;
-        let gravity = 0.5;
-        let jumpForce = -12;
+        let gravity = 0.3;
+        let jumpForce = -8;
         let isJumping = false;
         let monsterInterval;
         let gameLoop;
+        let lastBeamTime = 0;
         
         const gameContainer = document.getElementById('game-container');
         const ultraman = document.getElementById('ultraman');
         const scoreDisplay = document.getElementById('score-display');
         const gameOverScreen = document.getElementById('game-over');
         const finalScoreDisplay = document.getElementById('final-score');
+        
+        // 触摸控制元素
+        const leftBtn = document.getElementById('left-btn');
+        const rightBtn = document.getElementById('right-btn');
+        const jumpBtn = document.getElementById('jump-btn');
+        const shootBtn = document.getElementById('shoot-btn');
         
         // 初始化游戏
         function initGame() {
@@ -160,17 +274,17 @@
             gameRunning = true;
             
             // 生成怪兽
-            monsterInterval = setInterval(createMonster, 2000);
+            monsterInterval = setInterval(createMonster, 1500);
             
             // 游戏主循环
             gameLoop = setInterval(updateGame, 20);
             
             // 重置按键状态
             keysPressed = {
-                ArrowLeft: false,
-                ArrowRight: false,
-                ArrowUp: false,
-                ' ': false
+                left: false,
+                right: false,
+                up: false,
+                shoot: false
             };
         }
         
@@ -187,7 +301,7 @@
         function gameOver() {
             pauseGame();
             finalScoreDisplay.textContent = score;
-            gameOverScreen.style.display = 'block';
+            gameOverScreen.style.display = 'flex';
         }
         
         // 创建怪兽
@@ -197,7 +311,7 @@
             const monster = document.createElement('div');
             monster.className = 'monster';
             monster.style.right = '0px';
-            monster.style.top = Math.random() * 300 + 'px';
+            monster.style.top = Math.random() * (gameContainer.offsetHeight - 100) + 'px';
             gameContainer.appendChild(monster);
             monsters.push(monster);
         }
@@ -211,8 +325,8 @@
             const ultramanRect = ultraman.getBoundingClientRect();
             const gameRect = gameContainer.getBoundingClientRect();
             
-            beam.style.left = (ultramanRect.left - gameRect.left + 100) + 'px';
-            beam.style.top = (ultramanRect.top - gameRect.top + 70) + 'px';
+            beam.style.left = (ultramanRect.left - gameRect.left + 60) + 'px';
+            beam.style.top = (ultramanRect.top - gameRect.top + 40) + 'px';
             gameContainer.appendChild(beam);
             beams.push(beam);
         }
@@ -236,18 +350,19 @@
         function updateUltraman() {
             // 水平移动
             let ultramanLeft = parseInt(ultraman.style.left) || 50;
+            const moveSpeed = 4;
             
-            if (keysPressed.ArrowLeft && ultramanLeft > 0) {
-                ultraman.style.left = (ultramanLeft - 5) + 'px';
+            if (keysPressed.left && ultramanLeft > 0) {
+                ultraman.style.left = (ultramanLeft - moveSpeed) + 'px';
                 ultraman.style.transform = 'scaleX(-1)';
             }
-            if (keysPressed.ArrowRight && ultramanLeft < gameContainer.offsetWidth - 100) {
-                ultraman.style.left = (ultramanLeft + 5) + 'px';
+            if (keysPressed.right && ultramanLeft < gameContainer.offsetWidth - 60) {
+                ultraman.style.left = (ultramanLeft + moveSpeed) + 'px';
                 ultraman.style.transform = 'scaleX(1)';
             }
             
             // 跳跃
-            if (keysPressed.ArrowUp && !isJumping) {
+            if (keysPressed.up && !isJumping) {
                 ultramanSpeed = jumpForce;
                 isJumping = true;
             }
@@ -267,7 +382,7 @@
             ultraman.style.bottom = (ground - ultramanY) + 'px';
             
             // 发射光线
-            if (keysPressed[' '] && beams.length < 3 && Date.now() - (lastBeamTime || 0) > 500) {
+            if (keysPressed.shoot && beams.length < 3 && Date.now() - lastBeamTime > 500) {
                 createBeam();
                 lastBeamTime = Date.now();
             }
@@ -277,7 +392,7 @@
         function updateMonsters() {
             monsters.forEach((monster, index) => {
                 const currentRight = parseInt(monster.style.right) || 0;
-                monster.style.right = (currentRight + 3) + 'px';
+                monster.style.right = (currentRight + 2) + 'px';
                 
                 // 移除超出屏幕的怪兽
                 if (currentRight > gameContainer.offsetWidth) {
@@ -293,7 +408,7 @@
         function updateBeams() {
             beams.forEach((beam, index) => {
                 const currentLeft = parseInt(beam.style.left) || 0;
-                beam.style.left = (currentLeft + 10) + 'px';
+                beam.style.left = (currentLeft + 8) + 'px';
                 
                 // 移除超出屏幕的光线
                 if (currentLeft > gameContainer.offsetWidth) {
@@ -351,57 +466,47 @@
         
         // 键盘控制
         let keysPressed = {};
-        let lastBeamTime = 0;
         
         document.addEventListener('keydown', (e) => {
-            if (['ArrowLeft', 'ArrowRight', 'ArrowUp', ' '].includes(e.key)) {
-                keysPressed[e.key] = true;
-                e.preventDefault();
-            }
+            if (e.key === 'ArrowLeft') keysPressed.left = true;
+            if (e.key === 'ArrowRight') keysPressed.right = true;
+            if (e.key === 'ArrowUp') keysPressed.up = true;
+            if (e.key === ' ') keysPressed.shoot = true;
         });
         
         document.addEventListener('keyup', (e) => {
-            if (['ArrowLeft', 'ArrowRight', 'ArrowUp', ' '].includes(e.key)) {
-                keysPressed[e.key] = false;
+            if (e.key === 'ArrowLeft') keysPressed.left = false;
+            if (e.key === 'ArrowRight') keysPressed.right = false;
+            if (e.key === 'ArrowUp') keysPressed.up = false;
+            if (e.key === ' ') keysPressed.shoot = false;
+        });
+        
+        // 触摸控制
+        leftBtn.addEventListener('touchstart', () => keysPressed.left = true);
+        leftBtn.addEventListener('touchend', () => keysPressed.left = false);
+        leftBtn.addEventListener('touchcancel', () => keysPressed.left = false);
+        
+        rightBtn.addEventListener('touchstart', () => keysPressed.right = true);
+        rightBtn.addEventListener('touchend', () => keysPressed.right = false);
+        rightBtn.addEventListener('touchcancel', () => keysPressed.right = false);
+        
+        jumpBtn.addEventListener('touchstart', () => keysPressed.up = true);
+        jumpBtn.addEventListener('touchend', () => keysPressed.up = false);
+        jumpBtn.addEventListener('touchcancel', () => keysPressed.up = false);
+        
+        shootBtn.addEventListener('touchstart', () => keysPressed.shoot = true);
+        shootBtn.addEventListener('touchend', () => keysPressed.shoot = false);
+        shootBtn.addEventListener('touchcancel', () => keysPressed.shoot = false);
+        
+        // 防止触摸时的页面滚动
+        document.addEventListener('touchmove', (e) => {
+            if (e.target.classList.contains('touch-btn')) {
                 e.preventDefault();
             }
-        });
+        }, { passive: false });
         
-        // 触摸控制 (移动设备)
-        let touchStartX = 0;
-        
-        gameContainer.addEventListener('touchstart', (e) => {
-            touchStartX = e.touches[0].clientX;
-            keysPressed.ArrowUp = true; // 跳跃
-            e.preventDefault();
-        });
-        
-        gameContainer.addEventListener('touchmove', (e) => {
-            const touchX = e.touches[0].clientX;
-            if (touchX < touchStartX - 10) {
-                keysPressed.ArrowLeft = true;
-                keysPressed.ArrowRight = false;
-            } else if (touchX > touchStartX + 10) {
-                keysPressed.ArrowRight = true;
-                keysPressed.ArrowLeft = false;
-            }
-            e.preventDefault();
-        });
-        
-        gameContainer.addEventListener('touchend', (e) => {
-            keysPressed.ArrowLeft = false;
-            keysPressed.ArrowRight = false;
-            keysPressed.ArrowUp = false;
-            e.preventDefault();
-        });
-        
-        // 发射按钮 (移动设备)
-        document.querySelector('#controls').addEventListener('click', (e) => {
-            if (e.target.tagName === 'BUTTON' && e.target.textContent === '发射') {
-                keysPressed[' '] = true;
-                setTimeout(() => { keysPressed[' '] = false; }, 100);
-            }
-        });
+        // 初始化游戏
+        initGame();
     </script>
 </body>
 </html>
