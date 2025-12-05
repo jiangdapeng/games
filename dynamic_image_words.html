@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>创意照片墙</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;700&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg:#0f1115; --panel:#1a1f29; --accent:#4b9fff; --text:#e6edf3; --muted:#8b94a7; }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:"Noto Sans SC",system-ui,-apple-system,Segoe UI,Roboto}
+    .layout{display:grid;grid-template-columns:320px 1fr;height:100%}
+    .panel{position:relative;z-index:10;background:var(--panel);padding:16px;overflow:auto;border-right:1px solid #262c37}
+    .panel h1{font-size:18px;margin:0 0 12px}
+    .field{margin:10px 0}
+    .field label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+    .field input[type="text"], .field input[type="number"], .field select{width:100%;padding:8px 10px;border:1px solid #2b3240;border-radius:6px;background:#0f131a;color:var(--text)}
+    .row{display:flex;gap:8px}
+    .row > *{flex:1}
+    .controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+    button{appearance:none;border:1px solid #2b3240;background:#131823;color:var(--text);padding:8px 12px;border-radius:8px;cursor:pointer}
+    button.primary{background:var(--accent);border-color:transparent;color:#021227}
+    button:disabled{opacity:.5;cursor:not-allowed}
+    .toggle{display:flex;align-items:center;gap:8px}
+    .hint{font-size:12px;color:var(--muted)}
+    .stage{position:relative;z-index:0;overflow:hidden;isolation:isolate;transform:translateZ(0)}
+    .canvas-wrap{position:absolute;inset:0;pointer-events:none;z-index:-1}
+    #stage{position:absolute;inset:0;z-index:0}
+    .photo{position:absolute;top:0;left:0;width:40px;height:40px;border-radius:8px;overflow:hidden;transform-origin:top left;transform:translate3d(0,0,0) scale(0.3);opacity:0;will-change:transform,opacity}
+    .photo img{width:100%;height:100%;object-fit:cover;display:block;image-rendering:-webkit-optimize-contrast;image-rendering:auto}
+    .footer{position:absolute;bottom:12px;left:12px;right:12px;display:flex;justify-content:space-between;align-items:center;pointer-events:none}
+    .footer .info{pointer-events:auto;background:#11161f;border:1px solid #2b3240;border-radius:8px;padding:6px 10px;font-size:12px;color:var(--muted)}
+    .uploader{border:1px dashed #2b3240;border-radius:8px;padding:10px;text-align:center;color:var(--muted)}
+    .uploader input{display:none}
+    .uploader label{display:inline-block;padding:8px 12px;border-radius:6px;background:#0f131a;border:1px solid #2b3240;color:var(--text);cursor:pointer}
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="panel">
+      <h1>创意照片墙</h1>
+      <div class="field">
+        <label>词语</label>
+        <input id="word" type="text" placeholder="例如：2025" value="2025">
+      </div>
+      
+      <div class="field row">
+        <div>
+          <label>动画速度(ms)</label>
+          <input id="speed" type="number" min="300" max="3000" value="1200">
+        </div>
+        <div>
+          <label>入场间隔(ms)</label>
+          <input id="stagger" type="number" min="40" max="600" value="120">
+        </div>
+      </div>
+      <div class="field toggle">
+        <input id="randomOrder" type="checkbox" checked>
+        <label for="randomOrder">随机顺序</label>
+      </div>
+      <div class="field">
+        <div class="uploader">
+          <p>上传照片（支持多选）</p>
+          <label for="files">选择图片</label>
+          <input id="files" type="file" multiple accept="image/*">
+          <p class="hint">或使用演示数据</p>
+          <div class="controls">
+            <button id="demo" type="button">填充演示</button>
+          </div>
+        </div>
+      </div>
+      <div class="controls">
+        <button id="start" class="primary" type="button">开始</button>
+        <button id="pause" type="button">暂停</button>
+        <button id="resume" type="button">继续</button>
+        <button id="replay" type="button">重播</button>
+      </div>
+      <div class="field">
+        <div class="hint">字体与格子大小自动适配；格子大小为字体的 1/20。</div>
+      </div>
+    </aside>
+    <main class="stage">
+      <div id="stage"></div>
+      <div class="footer">
+        <div class="info" id="info">准备就绪</div>
+      </div>
+    </main>
+  </div>
+  <canvas id="maskCanvas" class="canvas-wrap" width="0" height="0" style="display:none"></canvas>
+  <script src="dynamic_image_words.js"></script>
+</body>
+</html>
