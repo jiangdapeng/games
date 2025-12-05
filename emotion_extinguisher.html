@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>情绪灭火器</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            overscroll-behavior: none;
+            user-select: none;
+            -webkit-user-select: none;
+            overflow: hidden;
+            font-family: system-ui, -apple-system, sans-serif;
+            transition: background-color 0.5s ease, background 1s ease;
+        }
+        
+        /* Custom animations */
+        @keyframes pulse-slow {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(0.95); }
+        }
+        .animate-pulse-slow {
+            animation: pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes bounce-slow {
+            0%, 100% { transform: translateY(-5%); }
+            50% { transform: translateY(5%); }
+        }
+        .animate-bounce-slow {
+            animation: bounce-slow 3s infinite;
+        }
+
+        /* Utility to center absolute elements */
+        .center-abs {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+    </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body class="w-full h-screen bg-gray-900 text-white">
+
+    <!-- Canvas Layer for Fire/Water Effects -->
+    <canvas id="fireCanvas" class="absolute top-0 left-0 w-full h-full z-10 pointer-events-none"></canvas>
+
+    <!-- UI Layer -->
+    <div id="uiLayer" class="absolute top-0 left-0 w-full h-full z-20 flex flex-col items-center justify-between p-6">
+        
+        <!-- Header / Tip Section -->
+        <div id="headerSection" class="mt-8 w-full max-w-md transition-opacity duration-500">
+            <h1 class="text-3xl font-bold text-center text-white mb-6 drop-shadow-md">情绪灭火器</h1>
+            
+            <!-- Tip Card -->
+            <div id="tipCard" class="bg-black/40 backdrop-blur-md rounded-xl p-6 border border-white/10 shadow-lg transition-all duration-500">
+                <div class="flex items-center justify-between mb-2">
+                    <span id="tipCategory" class="text-xs uppercase tracking-widest font-semibold opacity-70">准备就绪</span>
+                    <span class="text-xs opacity-50">冷静建议</span>
+                </div>
+                <h3 id="tipTitle" class="text-lg font-bold mb-1 text-white">长按下方按钮</h3>
+                <p id="tipContent" class="text-white/90 leading-relaxed font-light">
+                    当你感到愤怒时，长按灭火按钮，释放情绪，通过非暴力沟通找回平静。
+                </p>
+            </div>
+        </div>
+
+        <!-- Completed State (Hidden by default) -->
+        <div id="completedSection" class="absolute top-0 left-0 w-full h-full z-30 bg-transparent flex-col items-center justify-center pointer-events-auto hidden opacity-0 transition-opacity duration-1000">
+            <div class="w-full px-4 text-center mt-20">
+                <h2 class="text-3xl md:text-5xl font-bold text-white mb-6 drop-shadow-lg">
+                    恭喜你<br>心中怒火已经熄灭
+                </h2>
+                
+                <div class="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20 mb-8 max-w-md mx-auto text-left">
+                    <h3 class="text-xl font-bold text-blue-200 mb-4 text-center">非暴力沟通四要素</h3>
+                    <ul class="text-white/90 space-y-3 text-lg">
+                        <li class="flex gap-2">
+                            <span class="font-bold text-blue-300 whitespace-nowrap">1. 观察:</span>
+                            <span>描述客观事实，不带评论。</span>
+                        </li>
+                        <li class="flex gap-2">
+                            <span class="font-bold text-purple-300 whitespace-nowrap">2. 感受:</span>
+                            <span>表达你的真实情感。</span>
+                        </li>
+                        <li class="flex gap-2">
+                            <span class="font-bold text-green-300 whitespace-nowrap">3. 需要:</span>
+                            <span>说出导致感受的核心需求。</span>
+                        </li>
+                        <li class="flex gap-2">
+                            <span class="font-bold text-amber-300 whitespace-nowrap">4. 请求:</span>
+                            <span>提出具体的、正向的行动请求。</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <button id="resetBtn" class="group flex items-center justify-center gap-2 mx-auto bg-white/20 hover:bg-white/30 text-white px-8 py-3 rounded-full backdrop-blur-sm transition-all hover:scale-105 active:scale-95 cursor-pointer">
+                    <!-- Repeat Icon -->
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="group-hover:rotate-180 transition-transform duration-500"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>
+                    <span>重置</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Footer / Controls -->
+        <div id="controlsSection" class="w-full max-w-md flex flex-col items-center gap-6 mb-8 transition-opacity duration-500">
+            
+            <!-- Timer -->
+            <div id="timerContainer" class="flex items-center gap-2 text-white/80 bg-black/30 px-4 py-2 rounded-full hidden">
+                <!-- Timer Icon -->
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="10" x2="14" y1="2" y2="2"/><line x1="12" x2="15" y1="14" y2="11"/><circle cx="12" cy="14" r="8"/></svg>
+                <span id="timerText" class="font-mono text-xl">30s</span>
+            </div>
+
+            <!-- Main Button -->
+            <div class="relative group">
+                <div class="absolute inset-0 bg-blue-500 rounded-full blur-xl opacity-20 group-active:opacity-40 transition-all duration-200"></div>
+                
+                <button id="actionBtn" class="relative w-24 h-24 md:w-32 md:h-32 rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(59,130,246,0.5)] border-4 border-blue-400/50 transition-all duration-100 bg-blue-500 hover:bg-blue-600 animate-pulse-slow cursor-pointer active:scale-95 active:bg-blue-700">
+                    <!-- Droplets Icon -->
+                    <svg id="btnIcon" xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><path d="M7 16.3c2.2 0 4-1.83 4-4.05 0-1.16-.57-2.26-1.71-3.19S7.29 6.75 7 5.3c-.29 1.45-1.14 2.8-2.29 3.76S3 11.1 3 12.25c0 2.22 1.8 4.05 4 4.05z"/><path d="M12.56 6.6A10.97 10.97 0 0 0 14 3.02c.5 2.5 2 4.9 4 6.5s3 3.5 3 5.5a6.98 6.98 0 0 1-11.91 4.97"/></svg>
+                </button>
+            </div>
+            
+            <p id="instructionText" class="text-white/60 text-sm font-medium tracking-wide">长按灭火</p>
+        </div>
+    </div>
+
+    <!-- Application Logic -->
+    <script>
+        // --- 1. Data (NVC Tips) ---
+        const NVC_DATABASE = [
+            { category: "observation", title: "区分观察与评论", content: "试着说'我看到桌上有三个脏盘子'，而不是'你总是把家里弄得很乱'。" },
+            { category: "observation", title: "陈述事实", content: "客观描述：'这周你有三天是在晚上11点后回家的'，而不是'你一点都不顾家'。" },
+            { category: "feeling", title: "表达真实感受", content: "使用表达情感的词汇：'我感到很担心'，而不是表达想法的'我觉得你不负责任'。" },
+            { category: "feeling", title: "识别愤怒", content: "愤怒往往掩盖了其他情绪。问问自己：在愤怒之下，我是不是感到受伤或恐惧？" },
+            { category: "need", title: "连接核心需求", content: "'我需要整洁和秩序'，这比指责对方'邋遢'更能让人接受。" },
+            { category: "need", title: "寻求理解", content: "'我感到生气是因为我需要被倾听和理解'。" },
+            { category: "request", title: "提出具体请求", content: "'你愿意在今晚8点前把碗洗了吗？'而不是模糊的'请你勤快点'。" },
+            { category: "request", title: "正向语言", content: "告诉对方你希望他'做'什么，而不是'不要做'什么。例如'请降低音量'。" }
+        ];
+
+        // --- 2. State Management ---
+        const TOTAL_TIME_MS = 30000;
+        const AppState = { IDLE: 'IDLE', EXTINGUISHING: 'EXTINGUISHING', COMPLETED: 'COMPLETED' };
+        
+        let state = {
+            status: AppState.IDLE,
+            isPressing: false,
+            progressMs: 0,
+            intensity: 1.0,
+            tipInterval: null
+        };
+
+        // --- 3. Audio Subsystem ---
+        let audioCtx = null;
+        let oscillator = null;
+        let gainNode = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function startSound() {
+            initAudio();
+            if (!audioCtx) return;
+
+            // White noise buffer
+            const bufferSize = audioCtx.sampleRate * 2;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+
+            const noise = audioCtx.createBufferSource();
+            noise.buffer = buffer;
+            noise.loop = true;
+
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 800;
+
+            const gain = audioCtx.createGain();
+            gain.gain.value = 0.05;
+
+            noise.connect(filter);
+            filter.connect(gain);
+            gain.connect(audioCtx.destination);
+            noise.start();
+
+            oscillator = noise;
+            gainNode = gain;
+        }
+
+        function stopSound() {
+            if (oscillator) {
+                try { oscillator.stop(); } catch(e){}
+                oscillator.disconnect();
+                oscillator = null;
+            }
+            if (gainNode) {
+                gainNode.disconnect();
+                gainNode = null;
+            }
+        }
+
+        // --- 4. Logic & UI Updates ---
+        const ui = {
+            body: document.body,
+            header: document.getElementById('headerSection'),
+            controls: document.getElementById('controlsSection'),
+            completed: document.getElementById('completedSection'),
+            tipCard: document.getElementById('tipCard'),
+            tipCategory: document.getElementById('tipCategory'),
+            tipTitle: document.getElementById('tipTitle'),
+            tipContent: document.getElementById('tipContent'),
+            timerContainer: document.getElementById('timerContainer'),
+            timerText: document.getElementById('timerText'),
+            actionBtn: document.getElementById('actionBtn'),
+            instruction: document.getElementById('instructionText'),
+            btnIcon: document.getElementById('btnIcon'),
+            resetBtn: document.getElementById('resetBtn')
+        };
+
+        function getTipColor(cat) {
+            switch (cat) {
+                case 'observation': return 'text-blue-200 border-blue-500/50';
+                case 'feeling': return 'text-purple-200 border-purple-500/50';
+                case 'need': return 'text-green-200 border-green-500/50';
+                case 'request': return 'text-amber-200 border-amber-500/50';
+                default: return 'text-white border-white/20';
+            }
+        }
+
+        function getCategoryName(cat) {
+            switch (cat) {
+                case 'observation': return '观察';
+                case 'feeling': return '感受';
+                case 'need': return '需要';
+                case 'request': return '请求';
+                default: return '建议';
+            }
+        }
+
+        function updateTip() {
+            // "Scanning" effect
+            ui.tipCard.style.opacity = '0.7';
+            ui.tipCard.style.transform = 'scale(0.98)';
+            
+            setTimeout(() => {
+                const tip = NVC_DATABASE[Math.floor(Math.random() * NVC_DATABASE.length)];
+                
+                // Reset classes
+                ui.tipCard.className = `bg-black/40 backdrop-blur-md rounded-xl p-6 border shadow-lg transition-all duration-500 transform scale-100 opacity-100 ${getTipColor(tip.category)}`;
+                
+                ui.tipCategory.textContent = getCategoryName(tip.category);
+                ui.tipTitle.textContent = tip.title;
+                ui.tipContent.textContent = tip.content;
+            }, 300);
+        }
+
+        function setBackground() {
+            if (state.status === AppState.COMPLETED) {
+                ui.body.style.background = 'linear-gradient(to bottom, #1e3a8a, #075985, #115e59)';
+            } else {
+                // Hue: 0 (Red) -> 200 (Blue)
+                const hue = (1 - state.intensity) * 200;
+                const saturation = 50 + (state.intensity * 50);
+                const lightness = 10 + ((1 - state.intensity) * 20);
+                ui.body.style.background = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+            }
+        }
+
+        function completeApp() {
+            state.status = AppState.COMPLETED;
+            state.isPressing = false;
+            stopSound();
+            clearInterval(state.tipInterval);
+
+            // UI Transitions
+            ui.header.style.opacity = '0';
+            ui.controls.style.opacity = '0';
+            ui.controls.style.pointerEvents = 'none'; // Disable button interaction
+
+            // Show Completed Screen
+            ui.completed.classList.remove('hidden');
+            // Trigger reflow
+            void ui.completed.offsetWidth; 
+            ui.completed.style.opacity = '1';
+            
+            setBackground();
+        }
+
+        function resetApp() {
+            state.status = AppState.IDLE;
+            state.progressMs = 0;
+            state.intensity = 1.0;
+            state.isPressing = false;
+            
+            ui.completed.style.opacity = '0';
+            setTimeout(() => ui.completed.classList.add('hidden'), 500);
+
+            ui.header.style.opacity = '1';
+            ui.controls.style.opacity = '1';
+            ui.controls.style.pointerEvents = 'auto';
+            
+            ui.timerContainer.classList.add('hidden');
+            ui.instruction.textContent = "长按灭火";
+            ui.actionBtn.classList.remove('scale-95', 'bg-blue-600');
+            ui.actionBtn.classList.add('bg-blue-500', 'animate-pulse-slow');
+            ui.btnIcon.classList.remove('animate-bounce');
+
+            // Reset Tip
+            ui.tipCategory.textContent = "准备就绪";
+            ui.tipTitle.textContent = "长按下方按钮";
+            ui.tipContent.textContent = "当你感到愤怒时，长按灭火按钮，释放情绪，通过非暴力沟通找回平静。";
+            ui.tipCard.className = "bg-black/40 backdrop-blur-md rounded-xl p-6 border border-white/10 shadow-lg transition-all duration-500";
+
+            initParticles();
+            setBackground();
+        }
+
+        // --- 5. Interactions ---
+        function handlePressStart(e) {
+            e.preventDefault();
+            if (state.status === AppState.COMPLETED) return;
+
+            state.isPressing = true;
+            if (state.status === AppState.IDLE) {
+                state.status = AppState.EXTINGUISHING;
+                ui.timerContainer.classList.remove('hidden');
+                ui.instruction.textContent = "请坚持按住...";
+                ui.actionBtn.classList.remove('animate-pulse-slow');
+                
+                // Start rotating tips
+                updateTip();
+                state.tipInterval = setInterval(updateTip, 8000);
+            }
+
+            ui.actionBtn.classList.add('scale-95', 'bg-blue-600');
+            ui.btnIcon.classList.add('animate-bounce');
+            startSound();
+        }
+
+        function handlePressEnd(e) {
+            e.preventDefault();
+            state.isPressing = false;
+            
+            ui.actionBtn.classList.remove('scale-95', 'bg-blue-600');
+            ui.btnIcon.classList.remove('animate-bounce');
+            stopSound();
+        }
+
+        ui.actionBtn.addEventListener('mousedown', handlePressStart);
+        ui.actionBtn.addEventListener('touchstart', handlePressStart, {passive: false});
+        
+        window.addEventListener('mouseup', handlePressEnd);
+        window.addEventListener('touchend', handlePressEnd);
+
+        ui.resetBtn.addEventListener('click', resetApp);
+
+        // --- 6. Canvas & Animation Loop ---
+        const canvas = document.getElementById('fireCanvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+
+        let fireParticles = [];
+        let waterParticles = [];
+        let steamParticles = [];
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        function initParticles() {
+            fireParticles = [];
+            waterParticles = [];
+            steamParticles = [];
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Game Logic: Update Progress
+            if (state.isPressing && state.status !== AppState.COMPLETED) {
+                state.progressMs += 16.67; // approx 60fps
+                if (state.progressMs >= TOTAL_TIME_MS) {
+                    completeApp();
+                } else {
+                    // Update Intensity
+                    const ratio = Math.min(1, Math.max(0, state.progressMs / TOTAL_TIME_MS));
+                    state.intensity = Math.pow(1 - ratio, 5);
+                    
+                    // Update Timer
+                    const timeLeft = Math.ceil((TOTAL_TIME_MS - state.progressMs) / 1000);
+                    ui.timerText.textContent = `${timeLeft}s`;
+                    setBackground();
+                }
+            }
+
+            // Drawing
+            ctx.clearRect(0, 0, width, height);
+
+            const centerX = width / 2;
+            const fireBaseY = height * 0.45;
+            const fireScale = Math.max(0.1, state.intensity);
+
+            // 1. Fire
+            if (state.intensity > 0.001 && state.status !== AppState.COMPLETED) {
+                const spawnCount = Math.floor(fireScale * 8) + 1;
+                for (let i = 0; i < spawnCount; i++) {
+                    if (Math.random() > 0.1) {
+                        const angle = (Math.random() - 0.5) * 0.8;
+                        const speed = 2 + Math.random() * 3 + (fireScale * 4);
+                        fireParticles.push({
+                            x: centerX + (Math.random() - 0.5) * (150 * fireScale),
+                            y: fireBaseY + (Math.random() * 20),
+                            vx: Math.sin(angle) * speed * 0.5,
+                            vy: -Math.cos(angle) * speed,
+                            life: 1.0,
+                            decay: 0.01 + Math.random() * 0.02,
+                            size: (25 + Math.random() * 40) * fireScale,
+                            hue: 0 + Math.random() * 40
+                        });
+                    }
+                }
+            }
+
+            // 2. Water
+            if (state.isPressing && state.intensity > 0 && state.status !== AppState.COMPLETED) {
+                const waterRate = 15;
+                for (let i = 0; i < waterRate; i++) {
+                    const nozzleX = centerX;
+                    const nozzleY = height - 80;
+                    const targetX = centerX + (Math.random() - 0.5) * 100 * fireScale;
+                    const targetY = fireBaseY - (Math.random() * 50);
+                    const dx = targetX - nozzleX;
+                    const dy = targetY - nozzleY;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    const speed = 25 + Math.random() * 5;
+
+                    waterParticles.push({
+                        x: nozzleX,
+                        y: nozzleY,
+                        vx: (dx / dist) * speed + (Math.random() - 0.5) * 1.5,
+                        vy: (dy / dist) * speed + (Math.random() - 0.5) * 1.5,
+                        size: 4 + Math.random() * 3,
+                        life: 1.0,
+                        collided: false
+                    });
+                }
+            }
+
+            // Render Fire
+            ctx.globalCompositeOperation = 'screen';
+            for (let i = fireParticles.length - 1; i >= 0; i--) {
+                const p = fireParticles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= p.decay;
+                p.size -= 0.15;
+                if (p.life > 0 && p.size > 0) {
+                    ctx.beginPath();
+                    const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size);
+                    g.addColorStop(0, `hsla(${p.hue}, 100%, 60%, ${p.life})`);
+                    g.addColorStop(1, `hsla(${p.hue - 10}, 100%, 50%, 0)`);
+                    ctx.fillStyle = g;
+                    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    fireParticles.splice(i, 1);
+                }
+            }
+
+            // Render Water
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.lineCap = 'round';
+            for (let i = waterParticles.length - 1; i >= 0; i--) {
+                const p = waterParticles[i];
+                const prevX = p.x;
+                const prevY = p.y;
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= 0.015;
+                p.vy += 0.8;
+
+                if (!p.collided) {
+                    const distToCenter = Math.abs(p.x - centerX);
+                    if (p.y < fireBaseY + 50 && p.y > fireBaseY - 150 && distToCenter < (100 * fireScale + 20)) {
+                        if (Math.random() > 0.6) {
+                            p.collided = true;
+                            p.life = 0;
+                            steamParticles.push({
+                                x: p.x, y: p.y,
+                                vx: (Math.random() - 0.5) * 3,
+                                vy: -1 - Math.random() * 2,
+                                life: 1.0, size: 15 + Math.random() * 15,
+                                gray: 200 + Math.random() * 55
+                            });
+                        }
+                    }
+                }
+
+                if (p.life > 0 && p.y < height) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = `rgba(180, 230, 255, ${0.4 + p.life * 0.6})`;
+                    ctx.lineWidth = p.size;
+                    ctx.moveTo(prevX, prevY);
+                    ctx.lineTo(p.x, p.y);
+                    ctx.stroke();
+                } else {
+                    waterParticles.splice(i, 1);
+                }
+            }
+
+            // Render Steam
+            for (let i = steamParticles.length - 1; i >= 0; i--) {
+                const p = steamParticles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= 0.02;
+                p.size += 0.3;
+                if (p.life > 0) {
+                    ctx.fillStyle = `rgba(${p.gray}, ${p.gray}, ${p.gray}, ${p.life * 0.15})`;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    steamParticles.splice(i, 1);
+                }
+            }
+        }
+
+        // Start Loop
+        animate();
+
+    </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>
