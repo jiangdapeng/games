@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>创意照片墙</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="control-panel">
+        <div class="panel-block">
+          <p class="eyebrow">Creative Photo Wall</p>
+          <h1>照片拼字动画</h1>
+          <p class="panel-copy">
+            先选一组照片，再输入祝福语、诗句或短句，让照片像像素一样拼出每个字。
+          </p>
+        </div>
+
+        <div class="panel-block">
+          <label class="field-label" for="photoInput">上传照片</label>
+          <input id="photoInput" type="file" accept="image/*" multiple />
+          <p class="field-hint">支持一次选择几十张，动画中会自动重复使用照片。</p>
+        </div>
+
+        <div class="panel-block">
+          <label class="field-label" for="messageInput">输入文字</label>
+          <textarea id="messageInput" rows="5" placeholder="例如：新年快乐">新年快乐</textarea>
+        </div>
+
+        <div class="panel-block slider-block">
+          <div class="slider-header">
+            <label class="field-label" for="tileSizeRange">照片格子大小</label>
+            <span id="tileSizeValue">22 px</span>
+          </div>
+          <input id="tileSizeRange" type="range" min="14" max="34" step="2" value="22" />
+          <p class="field-hint">格子越小，文字越清晰；格子越大，照片细节越明显。</p>
+        </div>
+
+        <div class="panel-block slider-block">
+          <div class="slider-header">
+            <label class="field-label" for="holdTimeRange">单字停留时间</label>
+            <span id="holdTimeValue">3.0 秒</span>
+          </div>
+          <input id="holdTimeRange" type="range" min="2" max="5" step="0.5" value="3" />
+        </div>
+
+        <div class="button-row">
+          <button id="startButton" class="primary-button" type="button">开始动画</button>
+          <button id="resetButton" class="secondary-button" type="button">恢复网格</button>
+        </div>
+
+        <p id="statusText" class="status-text">请先上传照片，然后点击开始。</p>
+      </aside>
+
+      <main class="stage-panel">
+        <div class="stage-toolbar">
+          <div>
+            <h2>预览舞台</h2>
+            <p>默认显示传统网格，开始后会逐字变换。</p>
+          </div>
+          <div class="stat-pill">
+            <span>照片数量</span>
+            <strong id="photoCount">0</strong>
+          </div>
+        </div>
+
+        <section class="stage-frame">
+          <div id="stage" class="stage"></div>
+          <canvas id="glyphCanvas" class="hidden-canvas" width="1200" height="700"></canvas>
+        </section>
+      </main>
+    </div>
+
+    <script src="./script.js"></script>
+  </body>
+</html>
