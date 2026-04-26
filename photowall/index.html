@@ -11,21 +11,50 @@
       <aside class="control-panel">
         <div class="panel-block">
           <p class="eyebrow">Creative Photo Wall</p>
-          <h1>照片拼字动画</h1>
+          <h1>照片墙</h1>
           <p class="panel-copy">
-            先选一组照片，再输入祝福语、诗句或短句，让照片像像素一样拼出每个字。
+            选一组照片作为像素，拼出文字或图片的形状。
           </p>
         </div>
 
         <div class="panel-block">
-          <label class="field-label" for="photoInput">上传照片</label>
+          <label class="field-label">拼接模式</label>
+          <div class="mode-tabs" id="modeTabs">
+            <button class="mode-tab is-active" data-mode="text">拼文字</button>
+            <button class="mode-tab" data-mode="image">拼图片</button>
+          </div>
+        </div>
+
+        <div class="panel-block">
+          <label class="field-label" for="photoInput">上传素材照片</label>
           <input id="photoInput" type="file" accept="image/*" multiple />
           <p class="field-hint">支持一次选择几十张，动画中会自动重复使用照片。</p>
         </div>
 
-        <div class="panel-block">
+        <div class="panel-block mode-text">
           <label class="field-label" for="messageInput">输入文字</label>
           <textarea id="messageInput" rows="5" placeholder="例如：新年快乐">新年快乐</textarea>
+        </div>
+
+        <div class="panel-block mode-image is-hidden">
+          <label class="field-label" for="refImageInput">上传参考图</label>
+          <input id="refImageInput" type="file" accept="image/*" />
+          <p class="field-hint">选择一张目标图案，照片会拼出它的形状（如爱心、人脸等）。</p>
+        </div>
+
+        <div class="panel-block slider-block mode-image is-hidden">
+          <div class="slider-header">
+            <label class="field-label" for="thresholdRange">亮度阈值</label>
+            <span id="thresholdValue">128</span>
+          </div>
+          <input id="thresholdRange" type="range" min="0" max="255" step="5" value="128" />
+          <div class="invert-row">
+            <label class="invert-label">
+              <input id="invertFillCheckbox" type="checkbox" checked />
+              <span>反转填充方向</span>
+            </label>
+          </div>
+          <p class="field-hint">默认填充较暗区域（如白底上的图案），取消勾选则填充较亮区域。</p>
         </div>
 
         <div class="panel-block slider-block">
@@ -34,10 +63,10 @@
             <span id="tileSizeValue">22 px</span>
           </div>
           <input id="tileSizeRange" type="range" min="14" max="34" step="2" value="22" />
-          <p class="field-hint">格子越小，文字越清晰；格子越大，照片细节越明显。</p>
+          <p class="field-hint">格子越小，拼图越精细；格子越大，单张照片细节越明显。</p>
         </div>
 
-        <div class="panel-block slider-block">
+        <div class="panel-block slider-block mode-text">
           <div class="slider-header">
             <label class="field-label" for="holdTimeRange">单字停留时间</label>
             <span id="holdTimeValue">3.0 秒</span>
@@ -46,7 +75,7 @@
         </div>
 
         <div class="button-row">
-          <button id="startButton" class="primary-button" type="button">开始动画</button>
+          <button id="startButton" class="primary-button" type="button">开始拼接</button>
           <button id="resetButton" class="secondary-button" type="button">恢复网格</button>
         </div>
 
