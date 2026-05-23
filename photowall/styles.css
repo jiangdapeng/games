@@ -190,7 +190,9 @@ textarea {
 /* ---- mode visibility ---- */
 
 .mode-text.is-hidden,
-.mode-image.is-hidden {
+.mode-image.is-hidden,
+.seg-luminance.is-hidden,
+.seg-subject.is-hidden {
   display: none;
 }
 

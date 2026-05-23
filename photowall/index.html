@@ -42,19 +42,39 @@
           <p class="field-hint">选择一张目标图案，照片会拼出它的形状（如爱心、人脸等）。</p>
         </div>
 
-        <div class="panel-block slider-block mode-image is-hidden">
+        <div class="panel-block mode-image is-hidden">
+          <label class="field-label">提取方法</label>
+          <div class="mode-tabs" id="segModeTabs">
+            <button class="mode-tab is-active" data-seg="luminance">亮度阈值</button>
+            <button class="mode-tab" data-seg="subject">主体提取</button>
+          </div>
+        </div>
+
+        <div class="panel-block slider-block mode-image seg-luminance is-hidden">
           <div class="slider-header">
             <label class="field-label" for="thresholdRange">亮度阈值</label>
             <span id="thresholdValue">128</span>
           </div>
           <input id="thresholdRange" type="range" min="0" max="255" step="5" value="128" />
+          <p class="field-hint">默认填充较暗区域（如白底上的图案），取消勾选则填充较亮区域。</p>
+        </div>
+
+        <div class="panel-block slider-block mode-image seg-subject is-hidden">
+          <div class="slider-header">
+            <label class="field-label" for="edgeSensitivityRange">边缘灵敏度</label>
+            <span id="edgeSensitivityValue">50</span>
+          </div>
+          <input id="edgeSensitivityRange" type="range" min="0" max="100" step="5" value="50" />
+          <p class="field-hint">灵敏度越低，提取的边缘越少（仅保留强边缘）；越高则保留更多细节。</p>
+        </div>
+
+        <div class="panel-block mode-image is-hidden">
           <div class="invert-row">
             <label class="invert-label">
               <input id="invertFillCheckbox" type="checkbox" checked />
-              <span>反转填充方向</span>
+              <span>反转填充方向（填充背景区域而非主体）</span>
             </label>
           </div>
-          <p class="field-hint">默认填充较暗区域（如白底上的图案），取消勾选则填充较亮区域。</p>
         </div>
 
         <div class="panel-block slider-block">

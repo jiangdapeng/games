@@ -16,6 +16,9 @@ const refImageInput = document.getElementById("refImageInput");
 const thresholdRange = document.getElementById("thresholdRange");
 const thresholdValue = document.getElementById("thresholdValue");
 const invertFillCheckbox = document.getElementById("invertFillCheckbox");
+const segModeTabs = document.getElementById("segModeTabs");
+const edgeSensitivityRange = document.getElementById("edgeSensitivityRange");
+const edgeSensitivityValue = document.getElementById("edgeSensitivityValue");
 
 const state = {
   photos: [],
@@ -30,6 +33,10 @@ const state = {
   luminanceThreshold: Number(thresholdRange.value),
   invertFill: true,
   emptyStateNode: null,
+  segmentationMode: "luminance", // "luminance" | "subject"
+  edgeSensitivity: 50,
+  cachedSubjectMask: null,
+  cachedMaskKey: "",
 };
 
 function createEmptyState() {
@@ -71,6 +78,8 @@ function revokeRefImage() {
     state.refImageUrl = null;
   }
   state.refImage = null;
+  state.cachedSubjectMask = null;
+  state.cachedMaskKey = "";
 }
 
 function clearTiles() {
@@ -92,6 +101,10 @@ function updateHoldTimeLabel() {
 
 function updateThresholdLabel() {
   thresholdValue.textContent = String(state.luminanceThreshold);
+}
+
+function updateEdgeSensitivityLabel() {
+  edgeSensitivityValue.textContent = String(state.edgeSensitivity);
 }
 
 function readStageRect() {
@@ -268,6 +281,304 @@ function computeLuminance(r, g, b) {
   return 0.299 * r + 0.587 * g + 0.114 * b;
 }
 
+// ---- subject extraction pipeline ----
+
+function getMaskCtx(w, h) {
+  if (!getMaskCtx._canvas) {
+    getMaskCtx._canvas = document.createElement("canvas");
+    getMaskCtx._ctx = getMaskCtx._canvas.getContext("2d", { willReadFrequently: true });
+  }
+  var c = getMaskCtx._canvas;
+  if (c.width !== w || c.height !== h) {
+    c.width = w;
+    c.height = h;
+  }
+  return { ctx: getMaskCtx._ctx, w: w, h: h };
+}
+
+function boxBlur(gray, w, h, radius) {
+  var tmp = new Float32Array(w * h);
+  var out = new Float32Array(w * h);
+
+  // horizontal
+  for (var y = 0; y < h; y++) {
+    var rowStart = y * w;
+    for (var x = 0; x < w; x++) {
+      var sum = 0;
+      var count = 0;
+      var x0 = Math.max(0, x - radius);
+      var x1 = Math.min(w - 1, x + radius);
+      for (var nx = x0; nx <= x1; nx++) {
+        var v = gray[rowStart + nx];
+        if (v >= 0) { sum += v; count++; }
+      }
+      tmp[rowStart + x] = count > 0 ? sum / count : 0;
+    }
+  }
+
+  // vertical
+  for (var y = 0; y < h; y++) {
+    var rowStart = y * w;
+    var y0 = Math.max(0, y - radius);
+    var y1 = Math.min(h - 1, y + radius);
+    for (var x = 0; x < w; x++) {
+      var sum = 0;
+      var count = 0;
+      for (var ny = y0; ny <= y1; ny++) {
+        var v = tmp[ny * w + x];
+        if (v >= 0) { sum += v; count++; }
+      }
+      out[rowStart + x] = count > 0 ? sum / count : 0;
+    }
+  }
+
+  return out;
+}
+
+function sobelEdges(gray, w, h) {
+  var out = new Float32Array(w * h);
+  var maxVal = 0;
+
+  for (var y = 1; y < h - 1; y++) {
+    var row = y * w;
+    var rowUp = (y - 1) * w;
+    var rowDown = (y + 1) * w;
+    for (var x = 1; x < w - 1; x++) {
+      var gx = -gray[rowUp + x - 1]   + gray[rowUp + x + 1]
+               -2 * gray[row + x - 1]  + 2 * gray[row + x + 1]
+               -gray[rowDown + x - 1]  + gray[rowDown + x + 1];
+      var gy = -gray[rowUp + x - 1]   -2 * gray[rowUp + x]   -gray[rowUp + x + 1]
+               +gray[rowDown + x - 1] +2 * gray[rowDown + x] +gray[rowDown + x + 1];
+      var mag = Math.sqrt(gx * gx + gy * gy);
+      out[row + x] = mag;
+      if (mag > maxVal) maxVal = mag;
+    }
+  }
+
+  // normalize to 0-255
+  if (maxVal > 0) {
+    for (var i = 0; i < out.length; i++) {
+      out[i] = (out[i] / maxVal) * 255;
+    }
+  }
+
+  return out;
+}
+
+function dilate(mask, w, h, radius) {
+  var out = new Uint8Array(w * h);
+
+  for (var y = 0; y < h; y++) {
+    var rowStart = y * w;
+    var y0 = Math.max(0, y - radius);
+    var y1 = Math.min(h - 1, y + radius);
+    for (var x = 0; x < w; x++) {
+      var found = false;
+      for (var ny = y0; ny <= y1 && !found; ny++) {
+        var nRow = ny * w;
+        var x0 = Math.max(0, x - radius);
+        var x1 = Math.min(w - 1, x + radius);
+        for (var nx = x0; nx <= x1; nx++) {
+          if (mask[nRow + nx]) { found = true; break; }
+        }
+      }
+      out[rowStart + x] = found ? 1 : 0;
+    }
+  }
+  return out;
+}
+
+function floodFillEdges(barrier, w, h, gray) {
+  var visited = new Uint8Array(w * h);
+  var queue = [];
+  var qHead = 0;
+
+  // seed from all 4 edges, skipping barrier pixels
+  for (var x = 0; x < w; x++) {
+    if (gray[x] >= 0 && !barrier[x]) { queue.push(x, 0); visited[x] = 1; }
+    var btm = (h - 1) * w + x;
+    if (gray[btm] >= 0 && !barrier[btm]) { queue.push(btm, h - 1); visited[btm] = 1; }
+  }
+  for (var y = 1; y < h - 1; y++) {
+    var left = y * w;
+    if (gray[left] >= 0 && !barrier[left]) { queue.push(left, y); visited[left] = 1; }
+    var right = y * w + w - 1;
+    if (gray[right] >= 0 && !barrier[right]) { queue.push(right, y); visited[right] = 1; }
+  }
+
+  while (qHead < queue.length) {
+    var idx = queue[qHead++];
+    var cy = queue[qHead++];
+    var cx = idx - cy * w;
+    var rowStart = cy * w;
+
+    var neighbors = [
+      cx > 0 ? rowStart + cx - 1 : -1,
+      cx < w - 1 ? rowStart + cx + 1 : -1,
+      cy > 0 ? rowStart - w + cx : -1,
+      cy < h - 1 ? rowStart + w + cx : -1,
+    ];
+
+    for (var n = 0; n < 4; n++) {
+      var ni = neighbors[n];
+      if (ni >= 0 && !visited[ni] && !barrier[ni] && gray[ni] >= 0) {
+        visited[ni] = 1;
+        var ny = Math.floor(ni / w);
+        queue.push(ni, ny);
+      }
+    }
+  }
+
+  return visited; // 1 = reachable from edge (background)
+}
+
+function keepLargestComponent(mask, w, h) {
+  var labels = new Int32Array(w * h);
+  labels.fill(-1);
+  var sizes = [];
+  var eq = []; // union-find equivalence table
+
+  function findRoot(a) {
+    while (eq[a] !== a) { a = eq[a]; }
+    return a;
+  }
+
+  // first pass: label
+  var nextLabel = 0;
+  for (var y = 0; y < h; y++) {
+    var row = y * w;
+    for (var x = 0; x < w; x++) {
+      if (!mask[row + x]) continue;
+
+      var above = y > 0 ? labels[row - w + x] : -1;
+      var left = x > 0 ? labels[row + x - 1] : -1;
+
+      if (above < 0 && left < 0) {
+        labels[row + x] = nextLabel;
+        eq[nextLabel] = nextLabel;
+        sizes[nextLabel] = 1;
+        nextLabel++;
+      } else if (above >= 0 && left < 0) {
+        var root = findRoot(above);
+        labels[row + x] = root;
+        sizes[root]++;
+      } else if (above < 0 && left >= 0) {
+        var root = findRoot(left);
+        labels[row + x] = root;
+        sizes[root]++;
+      } else {
+        var rAbove = findRoot(above);
+        var rLeft = findRoot(left);
+        if (rAbove === rLeft) {
+          labels[row + x] = rAbove;
+          sizes[rAbove]++;
+        } else {
+          // merge smaller into larger
+          if (sizes[rAbove] >= sizes[rLeft]) {
+            eq[rLeft] = rAbove;
+            labels[row + x] = rAbove;
+            sizes[rAbove] += sizes[rLeft] + 1;
+          } else {
+            eq[rAbove] = rLeft;
+            labels[row + x] = rLeft;
+            sizes[rLeft] += sizes[rAbove] + 1;
+          }
+        }
+      }
+    }
+  }
+
+  // find largest
+  var largestRoot = -1;
+  var largestSize = 0;
+  for (var i = 0; i < nextLabel; i++) {
+    if (eq[i] === i && sizes[i] > largestSize) {
+      largestSize = sizes[i];
+      largestRoot = i;
+    }
+  }
+
+  // second pass: keep only largest
+  var out = new Uint8Array(w * h);
+  for (var i = 0; i < labels.length; i++) {
+    if (labels[i] >= 0 && findRoot(labels[i]) === largestRoot) {
+      out[i] = 1;
+    }
+  }
+  return out;
+}
+
+function computeSubjectMask(imageElement, rect) {
+  var w = Math.round(rect.width);
+  var h = Math.round(rect.height);
+
+  var mc = getMaskCtx(w, h);
+  mc.ctx.clearRect(0, 0, w, h);
+
+  // fit image to stage preserving aspect ratio
+  var imgAspect = imageElement.naturalWidth / imageElement.naturalHeight;
+  var stageAspect = rect.width / rect.height;
+  var dw, dh;
+  if (imgAspect > stageAspect) {
+    dw = rect.width * 0.85;
+    dh = dw / imgAspect;
+  } else {
+    dh = rect.height * 0.85;
+    dw = dh * imgAspect;
+  }
+  var dx = (rect.width - dw) / 2;
+  var dy = (rect.height - dh) / 2;
+
+  mc.ctx.drawImage(imageElement, dx, dy, dw, dh);
+  var imgData = mc.ctx.getImageData(0, 0, w, h);
+  var data = imgData.data;
+  var len = w * h;
+
+  // convert to grayscale
+  var gray = new Float32Array(len);
+  for (var i = 0; i < len; i++) {
+    var j = i * 4;
+    if (data[j + 3] < 80) {
+      gray[i] = -1;
+    } else {
+      gray[i] = 0.299 * data[j] + 0.587 * data[j + 1] + 0.114 * data[j + 2];
+    }
+  }
+
+  // blur to reduce noise
+  var blurred = boxBlur(gray, w, h, 2);
+
+  // edge detection
+  var edges = sobelEdges(blurred, w, h);
+
+  // threshold edges based on sensitivity
+  var sensitivity = state.edgeSensitivity / 100; // 0..1
+  var edgeThresh = 5 + (1 - sensitivity) * 95; // 5..100
+  var edgeMask = new Uint8Array(len);
+  for (var i = 0; i < len; i++) {
+    edgeMask[i] = edges[i] > edgeThresh ? 1 : 0;
+  }
+
+  // dilate edges to create flood-fill barriers
+  var dilated = dilate(edgeMask, w, h, 2);
+
+  // set outermost border as barrier to prevent leaks
+  for (var x = 0; x < w; x++) { dilated[x] = 1; dilated[(h - 1) * w + x] = 1; }
+  for (var y = 1; y < h - 1; y++) { dilated[y * w] = 1; dilated[y * w + w - 1] = 1; }
+
+  // flood fill from edges (what's reachable = background)
+  var bgMask = floodFillEdges(dilated, w, h, gray);
+
+  // foreground = not reached by flood fill, not transparent, not barrier
+  var fgMask = new Uint8Array(len);
+  for (var i = 0; i < len; i++) {
+    fgMask[i] = (gray[i] >= 0 && !bgMask[i] && !dilated[i]) ? 1 : 0;
+  }
+
+  // keep only the largest connected foreground region
+  return keepLargestComponent(fgMask, w, h);
+}
+
 function buildImagePoints(imageElement) {
   const rect = readStageRect();
   const dpr = window.devicePixelRatio || 1;
@@ -277,6 +588,21 @@ function buildImagePoints(imageElement) {
   const canvasWidth = Math.max(1, Math.round(rect.width * dpr));
   const canvasHeight = Math.max(1, Math.round(rect.height * dpr));
   const threshold = state.luminanceThreshold;
+
+  // Compute or retrieve subject mask when in subject mode
+  let subjectMask = null;
+  let maskW = 0;
+  let maskH = 0;
+  if (state.segmentationMode === "subject") {
+    const maskKey = `${imageElement.src}-${Math.round(rect.width)}-${Math.round(rect.height)}-${state.edgeSensitivity}`;
+    if (!state.cachedSubjectMask || state.cachedMaskKey !== maskKey) {
+      state.cachedSubjectMask = computeSubjectMask(imageElement, rect);
+      state.cachedMaskKey = maskKey;
+    }
+    subjectMask = state.cachedSubjectMask;
+    maskW = Math.round(rect.width);
+    maskH = Math.round(rect.height);
+  }
 
   if (glyphCanvas.width !== canvasWidth || glyphCanvas.height !== canvasHeight) {
     glyphCanvas.width = canvasWidth;
@@ -313,19 +639,27 @@ function buildImagePoints(imageElement) {
       const sampleX = Math.min(canvasWidth - 1, Math.round((x + tileSize * 0.5) * dpr));
       const sampleY = Math.min(canvasHeight - 1, Math.round((y + tileSize * 0.5) * dpr));
       const index = (sampleY * canvasWidth + sampleX) * 4;
-      const r = imageData[index];
-      const g = imageData[index + 1];
-      const b = imageData[index + 2];
       const a = imageData[index + 3];
 
       // skip transparent areas outside the drawn image
       if (a < 80) continue;
 
-      const luminance = computeLuminance(r, g, b);
-
-      const fill = state.invertFill
-        ? luminance < threshold
-        : luminance >= threshold;
+      let fill;
+      if (subjectMask) {
+        // sample subject mask at tile center (stage coordinates)
+        const mx = Math.min(maskW - 1, Math.round(x + tileSize * 0.5));
+        const my = Math.min(maskH - 1, Math.round(y + tileSize * 0.5));
+        const maskVal = subjectMask[my * maskW + mx];
+        fill = state.invertFill ? (maskVal === 1) : (maskVal === 0);
+      } else {
+        const r = imageData[index];
+        const g = imageData[index + 1];
+        const b = imageData[index + 2];
+        const luminance = computeLuminance(r, g, b);
+        fill = state.invertFill
+          ? luminance < threshold
+          : luminance >= threshold;
+      }
 
       if (fill) {
         points.push({
@@ -468,7 +802,11 @@ async function playImage() {
     const points = buildImagePoints(state.refImage);
 
     if (!points.length) {
-      setStatus("当前阈值下没有匹配到任何采样点，尝试调整阈值或反转填充方向。");
+      if (state.segmentationMode === "subject") {
+        setStatus("未提取到主体区域，尝试调整边缘灵敏度或切换到亮度阈值模式。");
+      } else {
+        setStatus("当前阈值下没有匹配到任何采样点，尝试调整阈值或反转填充方向。");
+      }
       startButton.disabled = false;
       return;
     }
@@ -502,8 +840,31 @@ function switchMode(mode) {
   textControls.forEach((el) => el.classList.toggle("is-hidden", mode !== "text"));
   imageControls.forEach((el) => el.classList.toggle("is-hidden", mode !== "image"));
 
+  // sync segmentation sub-mode visibility
+  if (mode === "image") {
+    updateSegControlsVisibility();
+  }
+
   cancelAnimation();
   layoutGrid();
+}
+
+function switchSegMode(segMode) {
+  state.segmentationMode = segMode;
+  state.cachedSubjectMask = null;
+  state.cachedMaskKey = "";
+
+  document.querySelectorAll("#segModeTabs .mode-tab").forEach((tab) => {
+    tab.classList.toggle("is-active", tab.dataset.seg === segMode);
+  });
+
+  updateSegControlsVisibility();
+}
+
+function updateSegControlsVisibility() {
+  const isSubject = state.segmentationMode === "subject";
+  document.querySelectorAll(".seg-luminance").forEach((el) => el.classList.toggle("is-hidden", isSubject));
+  document.querySelectorAll(".seg-subject").forEach((el) => el.classList.toggle("is-hidden", !isSubject));
 }
 
 // ---- animation control ----
@@ -562,6 +923,19 @@ invertFillCheckbox.addEventListener("change", () => {
   state.invertFill = invertFillCheckbox.checked;
 });
 
+segModeTabs.addEventListener("click", (event) => {
+  const tab = event.target.closest(".mode-tab");
+  if (!tab) return;
+  switchSegMode(tab.dataset.seg);
+});
+
+edgeSensitivityRange.addEventListener("input", () => {
+  state.edgeSensitivity = Number(edgeSensitivityRange.value);
+  state.cachedSubjectMask = null;
+  state.cachedMaskKey = "";
+  updateEdgeSensitivityLabel();
+});
+
 refImageInput.addEventListener("change", (event) => {
   const file = event.target.files?.[0];
   if (file) {
@@ -599,4 +973,5 @@ window.addEventListener("resize", () => {
 updateTileSizeLabel();
 updateHoldTimeLabel();
 updateThresholdLabel();
+updateEdgeSensitivityLabel();
 createEmptyState();
