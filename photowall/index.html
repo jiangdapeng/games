@@ -22,6 +22,7 @@
           <div class="mode-tabs" id="modeTabs">
             <button class="mode-tab is-active" data-mode="text">拼文字</button>
             <button class="mode-tab" data-mode="image">拼图片</button>
+            <button class="mode-tab" data-mode="canvas">画板</button>
           </div>
         </div>
 
@@ -86,6 +87,22 @@
           <p class="field-hint">格子越小，拼图越精细；格子越大，单张照片细节越明显。</p>
         </div>
 
+        <div class="panel-block slider-block mode-canvas is-hidden">
+          <div class="slider-header">
+            <label class="field-label" for="brushSizeRange">画笔粗细</label>
+            <span id="brushSizeValue">20 px</span>
+          </div>
+          <input id="brushSizeRange" type="range" min="4" max="60" step="2" value="20" />
+        </div>
+
+        <div class="panel-block mode-canvas is-hidden">
+          <div class="canvas-toolbar">
+            <button id="eraserToggle" class="tool-button" type="button">橡皮擦</button>
+            <button id="clearCanvasBtn" class="tool-button secondary" type="button">清空画布</button>
+          </div>
+          <p class="field-hint">在右侧画布上自由绘制形状，点击「开始拼接」用照片拼出画稿。</p>
+        </div>
+
         <div class="panel-block slider-block mode-text">
           <div class="slider-header">
             <label class="field-label" for="holdTimeRange">单字停留时间</label>
@@ -118,6 +135,7 @@
           <div class="scanlines" aria-hidden="true"></div>
           <div class="stage-grid" aria-hidden="true"></div>
           <div id="stage" class="stage"></div>
+          <canvas id="drawCanvas" class="draw-canvas is-hidden" width="800" height="600"></canvas>
           <canvas id="glyphCanvas" class="hidden-canvas" width="1200" height="700"></canvas>
         </section>
       </main>

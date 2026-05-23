@@ -19,6 +19,12 @@ const invertFillCheckbox = document.getElementById("invertFillCheckbox");
 const segModeTabs = document.getElementById("segModeTabs");
 const edgeSensitivityRange = document.getElementById("edgeSensitivityRange");
 const edgeSensitivityValue = document.getElementById("edgeSensitivityValue");
+const drawCanvas = document.getElementById("drawCanvas");
+const drawCtx = drawCanvas.getContext("2d");
+const brushSizeRange = document.getElementById("brushSizeRange");
+const brushSizeValue = document.getElementById("brushSizeValue");
+const eraserToggle = document.getElementById("eraserToggle");
+const clearCanvasBtn = document.getElementById("clearCanvasBtn");
 
 const state = {
   photos: [],
@@ -37,6 +43,11 @@ const state = {
   edgeSensitivity: 50,
   cachedSubjectMask: null,
   cachedMaskKey: "",
+  brushSize: Number(brushSizeRange.value),
+  isErasing: false,
+  isDrawing: false,
+  lastDrawX: 0,
+  lastDrawY: 0,
 };
 
 function createEmptyState() {
@@ -107,6 +118,96 @@ function updateEdgeSensitivityLabel() {
   edgeSensitivityValue.textContent = String(state.edgeSensitivity);
 }
 
+function updateBrushSizeLabel() {
+  brushSizeValue.textContent = `${state.brushSize} px`;
+}
+
+// ---- drawing canvas ----
+
+function initDrawingCanvas() {
+  const rect = readStageRect();
+  const dpr = window.devicePixelRatio || 1;
+  const w = Math.round(rect.width * dpr);
+  const h = Math.round(rect.height * dpr);
+
+  if (drawCanvas.width !== w || drawCanvas.height !== h) {
+    // preserve existing drawing when resizing
+    const oldData = drawCanvas.width > 0 ? drawCtx.getImageData(0, 0, drawCanvas.width, drawCanvas.height) : null;
+    drawCanvas.width = w;
+    drawCanvas.height = h;
+    drawCtx.fillStyle = "#fff";
+    drawCtx.fillRect(0, 0, w, h);
+    if (oldData) {
+      drawCtx.putImageData(oldData, 0, 0);
+    }
+  }
+}
+
+function clearDrawingCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = readStageRect();
+  const w = Math.round(rect.width * dpr);
+  const h = Math.round(rect.height * dpr);
+  drawCtx.fillStyle = "#fff";
+  drawCtx.fillRect(0, 0, w, h);
+}
+
+function getDrawPoint(e) {
+  const rect = drawCanvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  return {
+    x: (e.clientX - rect.left) * dpr,
+    y: (e.clientY - rect.top) * dpr,
+  };
+}
+
+function startStroke(e) {
+  e.preventDefault();
+  state.isDrawing = true;
+  const pt = getDrawPoint(e);
+  state.lastDrawX = pt.x;
+  state.lastDrawY = pt.y;
+
+  drawCtx.lineWidth = state.brushSize * (window.devicePixelRatio || 1);
+  drawCtx.lineCap = "round";
+  drawCtx.lineJoin = "round";
+  drawCtx.strokeStyle = state.isErasing ? "#fff" : "#111";
+  drawCtx.globalCompositeOperation = "source-over";
+
+  // draw a dot at the start point
+  drawCtx.beginPath();
+  drawCtx.arc(pt.x, pt.y, drawCtx.lineWidth / 2, 0, Math.PI * 2);
+  drawCtx.fillStyle = drawCtx.strokeStyle;
+  drawCtx.fill();
+}
+
+function continueStroke(e) {
+  if (!state.isDrawing) return;
+  e.preventDefault();
+  const pt = getDrawPoint(e);
+
+  drawCtx.lineWidth = state.brushSize * (window.devicePixelRatio || 1);
+  drawCtx.lineCap = "round";
+  drawCtx.lineJoin = "round";
+  drawCtx.strokeStyle = state.isErasing ? "#fff" : "#111";
+  drawCtx.globalCompositeOperation = "source-over";
+
+  drawCtx.beginPath();
+  drawCtx.moveTo(state.lastDrawX, state.lastDrawY);
+  drawCtx.lineTo(pt.x, pt.y);
+  drawCtx.stroke();
+
+  state.lastDrawX = pt.x;
+  state.lastDrawY = pt.y;
+}
+
+function endStroke(e) {
+  if (!state.isDrawing) return;
+  state.isDrawing = false;
+  state.lastDrawX = 0;
+  state.lastDrawY = 0;
+}
+
 function readStageRect() {
   return stage.getBoundingClientRect();
 }
@@ -151,6 +252,10 @@ function applyTileVisual(tile, spec, imageUrl) {
 }
 
 function layoutGrid() {
+  if (state.mode === "canvas") {
+    drawCanvas.classList.remove("is-hidden");
+  }
+
   if (!state.photos.length) {
     clearTiles();
     createEmptyState();
@@ -825,6 +930,62 @@ async function playImage() {
   }
 }
 
+// ---- canvas mode ----
+
+async function playCanvas() {
+  try {
+    if (!state.photos.length) {
+      setStatus("还没有照片，先上传一组图片吧。");
+      return;
+    }
+
+    removeEmptyState();
+    const token = Date.now();
+    state.animationToken = token;
+    startButton.disabled = true;
+    setStatus("正在用照片拼接画稿...");
+
+    // convert drawing canvas to an image, then use buildImagePoints
+    const dataUrl = drawCanvas.toDataURL("image/png");
+    const img = new Image();
+    img.src = dataUrl;
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+    });
+
+    const prevSegMode = state.segmentationMode;
+    state.segmentationMode = "luminance";
+    let points;
+    try {
+      points = buildImagePoints(img);
+    } finally {
+      state.segmentationMode = prevSegMode;
+    }
+
+    if (!points.length) {
+      setStatus("画板上没有检测到任何笔迹，请先在画布上绘制后再试。");
+      startButton.disabled = false;
+      return;
+    }
+
+    // hide drawing canvas so the mosaic tiles are visible
+    drawCanvas.classList.add("is-hidden");
+
+    showGlyph(points, token);
+
+    if (state.animationToken === token) {
+      setStatus(`拼接完成，共使用 ${points.length} 个照片格子。`);
+    }
+
+    startButton.disabled = false;
+  } catch (err) {
+    console.error("playCanvas error:", err);
+    setStatus("拼接出错: " + (err.message || "未知错误"));
+    startButton.disabled = false;
+  }
+}
+
 // ---- mode switching ----
 
 function switchMode(mode) {
@@ -836,13 +997,23 @@ function switchMode(mode) {
 
   const textControls = document.querySelectorAll(".mode-text");
   const imageControls = document.querySelectorAll(".mode-image");
+  const canvasControls = document.querySelectorAll(".mode-canvas");
 
   textControls.forEach((el) => el.classList.toggle("is-hidden", mode !== "text"));
   imageControls.forEach((el) => el.classList.toggle("is-hidden", mode !== "image"));
+  canvasControls.forEach((el) => el.classList.toggle("is-hidden", mode !== "canvas"));
+
+  // show/hide drawing canvas overlay
+  drawCanvas.classList.toggle("is-hidden", mode !== "canvas");
 
   // sync segmentation sub-mode visibility
   if (mode === "image") {
     updateSegControlsVisibility();
+  }
+
+  // init drawing canvas when entering canvas mode
+  if (mode === "canvas") {
+    initDrawingCanvas();
   }
 
   cancelAnimation();
@@ -936,6 +1107,29 @@ edgeSensitivityRange.addEventListener("input", () => {
   updateEdgeSensitivityLabel();
 });
 
+// ---- drawing canvas events ----
+
+drawCanvas.addEventListener("pointerdown", startStroke);
+drawCanvas.addEventListener("pointermove", continueStroke);
+drawCanvas.addEventListener("pointerup", endStroke);
+drawCanvas.addEventListener("pointerleave", endStroke);
+drawCanvas.addEventListener("pointercancel", endStroke);
+
+brushSizeRange.addEventListener("input", () => {
+  state.brushSize = Number(brushSizeRange.value);
+  updateBrushSizeLabel();
+});
+
+eraserToggle.addEventListener("click", () => {
+  state.isErasing = !state.isErasing;
+  eraserToggle.classList.toggle("is-active", state.isErasing);
+  eraserToggle.textContent = state.isErasing ? "橡皮擦 (开)" : "橡皮擦";
+});
+
+clearCanvasBtn.addEventListener("click", () => {
+  clearDrawingCanvas();
+});
+
 refImageInput.addEventListener("change", (event) => {
   const file = event.target.files?.[0];
   if (file) {
@@ -947,6 +1141,8 @@ startButton.addEventListener("click", () => {
   cancelAnimation();
   if (state.mode === "image") {
     playImage();
+  } else if (state.mode === "canvas") {
+    playCanvas();
   } else {
     playMessage();
   }
@@ -965,6 +1161,9 @@ modeTabs.addEventListener("click", (event) => {
 
 window.addEventListener("resize", () => {
   cancelAnimation();
+  if (state.mode === "canvas") {
+    initDrawingCanvas();
+  }
   layoutGrid();
 });
 
@@ -974,4 +1173,5 @@ updateTileSizeLabel();
 updateHoldTimeLabel();
 updateThresholdLabel();
 updateEdgeSensitivityLabel();
+updateBrushSizeLabel();
 createEmptyState();
