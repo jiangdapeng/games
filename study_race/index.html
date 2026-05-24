@@ -1,0 +1,2303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>学习赛车 - Study Race</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #1a1a2e;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  font-family: 'Arial', sans-serif;
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+#game-container {
+  position: relative;
+  width: 100vw;
+  max-width: 480px;
+  height: 100vh;
+  height: 100dvh;
+  max-height: 850px;
+  overflow: hidden;
+}
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: auto;
+}
+
+/* Question overlay */
+#question-panel {
+  display: none;
+  position: absolute;
+  bottom: 10%;
+  left: 5%;
+  right: 5%;
+  background: rgba(255,255,255,0.95);
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  z-index: 10;
+  text-align: center;
+}
+#question-panel.active { display: block; animation: popIn 0.3s ease-out; }
+@keyframes popIn {
+  0% { transform: scale(0.8); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+#q-type { font-size: 14px; color: #888; margin-bottom: 4px; }
+#q-text { font-size: 22px; font-weight: bold; color: #333; margin-bottom: 8px; }
+#q-timer-bar {
+  width: 100%; height: 6px; background: #eee; border-radius: 3px; margin-bottom: 12px; overflow: hidden;
+}
+#q-timer-fill {
+  height: 100%; background: #4CAF50; border-radius: 3px; transition: width 0.1s linear;
+}
+#q-timer-fill.warning { background: #FF9800; }
+#q-timer-fill.danger { background: #f44336; animation: pulse 0.5s infinite; }
+@keyframes pulse { 50% { opacity: 0.5; } }
+.q-btn {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  margin: 6px 0;
+  border: 3px solid #e0e0e0;
+  border-radius: 14px;
+  background: #fff;
+  font-size: 17px;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.q-btn:active { transform: scale(0.97); }
+.q-btn.correct { background: #4CAF50; color: #fff; border-color: #388E3C; }
+.q-btn.wrong { background: #f44336; color: #fff; border-color: #D32F2F; }
+
+/* Mobile nitro button */
+#nitro-btn {
+  display: none;
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border: 4px solid rgba(255,255,255,0.5);
+  color: #fff;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  z-index: 5;
+  box-shadow: 0 4px 20px rgba(102,126,234,0.4);
+}
+#nitro-btn:active { transform: scale(0.9); }
+#share-btn {
+  display: none;
+  position: absolute;
+  bottom: 120px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 14px 32px;
+  border-radius: 25px;
+  background: linear-gradient(135deg, #FF6B6B, #ee5a24);
+  border: 3px solid #fff;
+  color: #fff;
+  font-size: 17px;
+  font-weight: bold;
+  cursor: pointer;
+  z-index: 15;
+  box-shadow: 0 4px 20px rgba(238,90,36,0.4);
+  white-space: nowrap;
+}
+#share-btn:active { transform: translateX(-50%) scale(0.95); }
+#share-btn.show { display: block; }
+@media (max-width: 768px) {
+  #nitro-btn { display: flex; align-items: center; justify-content: center; }
+}
+</style>
+</head>
+<body>
+<div id="game-container">
+  <canvas id="game"></canvas>
+  <div id="question-panel">
+    <div id="q-type"></div>
+    <div id="q-text"></div>
+    <div id="q-timer-bar"><div id="q-timer-fill"></div></div>
+    <div id="q-options"></div>
+  </div>
+  <button id="nitro-btn">N₂O</button>
+  <button id="share-btn">📸 保存分享图</button>
+</div>
+
+<script>
+// ============ POLYFILL: roundRect ============
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+    if (typeof r === 'number') r = { tl: r, tr: r, br: r, bl: r };
+    this.beginPath();
+    this.moveTo(x + r.tl, y);
+    this.lineTo(x + w - r.tr, y);
+    this.arcTo(x + w, y, x + w, y + r.tr, r.tr);
+    this.lineTo(x + w, y + h - r.br);
+    this.arcTo(x + w, y + h, x + w - r.br, y + h, r.br);
+    this.lineTo(x + r.bl, y + h);
+    this.arcTo(x, y + h, x, y + h - r.bl, r.bl);
+    this.lineTo(x, y + r.tl);
+    this.arcTo(x, y, x + r.tl, y, r.tl);
+    this.closePath();
+  };
+}
+
+// ============ CONSTANTS ============
+const CANVAS_W = 480;
+const CANVAS_H = 800;
+
+// Road dimensions
+const ROAD_LEFT = 80;
+const ROAD_RIGHT = 400;
+const ROAD_WIDTH = ROAD_RIGHT - ROAD_LEFT;
+const LANE_WIDTH = ROAD_WIDTH / 3;
+const LANE_CENTERS = [
+  ROAD_LEFT + LANE_WIDTH * 0.5,
+  ROAD_LEFT + LANE_WIDTH * 1.5,
+  ROAD_LEFT + LANE_WIDTH * 2.5
+];
+
+// Player
+const PLAYER_W = 46;
+const PLAYER_H = 80;
+const PLAYER_Y = 620;
+const FUEL_MAX = 100;
+const FUEL_BURN_RATE = 1.8; // per second
+const FUEL_CORRECT = 30;
+const FUEL_WRONG = 10;
+const FUEL_COIN = 5;
+const FUEL_BOMB = 30;
+const NITRO_MAX = 3;
+const NITRO_DURATION = 3; // seconds
+const QUESTION_TIMER = 8; // seconds
+
+// Speeds
+const BASE_SPEED = 300; // pixels per second
+const NITRO_SPEED_MULT = 2;
+const SLOW_SPEED = 150;
+const SLOW_DURATION = 2; // seconds
+
+// ============ GAME STATE ============
+const STATE = { MENU: 'menu', PLAYING: 'playing', ANSWERING: 'answering', GAMEOVER: 'gameover' };
+
+// ============ CANVAS SETUP ============
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+canvas.width = CANVAS_W;
+canvas.height = CANVAS_H;
+
+// ============ DOM ELEMENTS ============
+const questionPanel = document.getElementById('question-panel');
+const qType = document.getElementById('q-type');
+const qText = document.getElementById('q-text');
+const qTimerFill = document.getElementById('q-timer-fill');
+const qOptions = document.getElementById('q-options');
+const nitroBtn = document.getElementById('nitro-btn');
+
+// ============ INPUT ============
+const keys = {};
+let touchStartX = 0;
+let touchStartY = 0;
+
+window.addEventListener('keydown', e => {
+  keys[e.key] = true;
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === ' ') {
+    e.preventDefault();
+  }
+});
+window.addEventListener('keyup', e => { keys[e.key] = false; });
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  touchStartX = t.clientX;
+  touchStartY = t.clientY;
+});
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  const t = e.changedTouches[0];
+  const dx = t.clientX - touchStartX;
+  const dy = t.clientY - touchStartY;
+  if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 30) {
+    if (dx > 0) keys['ArrowRight'] = true;
+    else keys['ArrowLeft'] = true;
+    setTimeout(() => {
+      keys['ArrowLeft'] = false;
+      keys['ArrowRight'] = false;
+    }, 100);
+  }
+});
+
+nitroBtn.addEventListener('touchstart', e => {
+  e.preventDefault();
+  e.stopPropagation();
+  keys[' '] = true;
+});
+nitroBtn.addEventListener('touchend', e => {
+  e.preventDefault();
+  e.stopPropagation();
+  keys[' '] = false;
+});
+
+// ============ AUDIO (simple oscillator-based) ============
+let audioCtx = null;
+function initAudio() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+}
+function playBeep(freq, dur, type='square', vol=0.08) {
+  if (!audioCtx) return;
+  try {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + dur);
+  } catch(e) {}
+}
+function sfxCorrect() { playBeep(523, 0.1); setTimeout(() => playBeep(659, 0.1), 100); setTimeout(() => playBeep(784, 0.15), 200); }
+function sfxWrong() { playBeep(200, 0.3, 'sawtooth'); }
+function sfxCoin() { playBeep(1200, 0.08); playBeep(1600, 0.06, 'sine'); }
+function sfxNitro() { playBeep(150, 0.5, 'sawtooth', 0.06); }
+function sfxBomb() { playBeep(80, 0.4, 'sawtooth', 0.1); }
+
+// ============ PARTICLES ============
+class Particle {
+  constructor(x, y, vx, vy, life, color, size=3) {
+    this.x = x; this.y = y; this.vx = vx; this.vy = vy;
+    this.life = life; this.maxLife = life; this.color = color; this.size = size;
+  }
+  get alive() { return this.life > 0; }
+  update(dt) {
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+    this.life -= dt;
+  }
+  draw(ctx) {
+    const alpha = this.life / this.maxLife;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = this.color;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.size * alpha + 1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+}
+
+class ParticleSystem {
+  constructor() { this.particles = []; }
+  emit(x, y, count, color, lifeRange=[0.3,0.8], speedRange=[50,200], sizeRange=[2,5]) {
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = speedRange[0] + Math.random() * (speedRange[1] - speedRange[0]);
+      const life = lifeRange[0] + Math.random() * (lifeRange[1] - lifeRange[0]);
+      const size = sizeRange[0] + Math.random() * (sizeRange[1] - sizeRange[0]);
+      this.particles.push(new Particle(
+        x, y,
+        Math.cos(angle) * speed, Math.sin(angle) * speed,
+        life, color, size
+      ));
+    }
+  }
+  update(dt) {
+    for (let i = this.particles.length - 1; i >= 0; i--) {
+      this.particles[i].update(dt);
+      if (!this.particles[i].alive) this.particles.splice(i, 1);
+    }
+  }
+  draw(ctx) {
+    for (const p of this.particles) p.draw(ctx);
+  }
+}
+
+// ============ FLOATING TEXT ============
+class FloatingText {
+  constructor(x, y, text, color, life=1.0) {
+    this.x = x; this.y = y; this.text = text; this.color = color;
+    this.life = life; this.maxLife = life;
+  }
+  get alive() { return this.life > 0; }
+  update(dt) {
+    this.y -= 40 * dt;
+    this.life -= dt;
+  }
+  draw(ctx) {
+    const alpha = Math.min(1, this.life / this.maxLife);
+    const scale = 1 + (1 - this.life / this.maxLife) * 0.3;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(this.x, this.y);
+    ctx.scale(scale, scale);
+    ctx.font = 'bold 20px Arial';
+    ctx.fillStyle = this.color;
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 3;
+    ctx.textAlign = 'center';
+    ctx.strokeText(this.text, 0, 0);
+    ctx.fillText(this.text, 0, 0);
+    ctx.restore();
+  }
+}
+
+// ============ LEVEL SYSTEM ============
+const LEVELS = [
+  { name: '幼儿园', icon: '🎒', threshold: 0, color: '#4CAF50' },
+  { name: '小学',   icon: '📚', threshold: 2000, color: '#2196F3' },
+  { name: '初中',   icon: '📖', threshold: 4000, color: '#FF9800' },
+  { name: '高中',   icon: '🎓', threshold: 6000, color: '#9C27B0' },
+  { name: '大学',   icon: '🏛️', threshold: 8000, color: '#E91E63' },
+  { name: '博士',   icon: '🔬', threshold: 10000, color: '#F44336' },
+];
+
+function getLevelIndex(score) {
+  let idx = 0;
+  for (let i = LEVELS.length - 1; i >= 0; i--) {
+    if (score >= LEVELS[i].threshold) { idx = i; break; }
+  }
+  return idx;
+}
+
+// ============ QUESTION SYSTEM ============
+
+// --- Master dispatcher ---
+function genQuestion(levelIdx) {
+  // Question type distribution varies by level
+  let types;
+  if (levelIdx === 0) types = ['math','math','pinyin','pinyin','pinyin','english'];
+  else if (levelIdx <= 1) types = ['math','pinyin','idiom','english'];
+  else if (levelIdx <= 2) types = ['math','pinyin','idiom','english'];
+  else if (levelIdx <= 3) types = ['math','poetry','idiom','english'];
+  else if (levelIdx <= 4) types = ['math','poetry','literature','english'];
+  else types = ['math','classics','literature','english'];
+
+  const type = types[Math.floor(Math.random() * types.length)];
+  switch (type) {
+    case 'math': return genMathQ(levelIdx);
+    case 'pinyin': return genPinyinQ(levelIdx);
+    case 'idiom': return genIdiomQ(levelIdx);
+    case 'poetry': return genPoetryQ(levelIdx);
+    case 'literature': return genLiteratureQ(levelIdx);
+    case 'classics': return genClassicsQ();
+    case 'english': return genEnglishQ(levelIdx);
+  }
+}
+
+// --- Math Questions by Level ---
+function genMathQ(level) {
+  let a, b, op, answer, question;
+
+  if (level === 0) {
+    // 幼儿园: single digit +/-, result ≤ 20
+    op = ['+','-'][Math.floor(Math.random() * 2)];
+    if (op === '+') {
+      a = Math.floor(Math.random() * 10) + 1;
+      b = Math.floor(Math.random() * (20 - a)) + 1;
+      answer = a + b;
+    } else {
+      a = Math.floor(Math.random() * 19) + 2;
+      b = Math.floor(Math.random() * (a - 1)) + 1;
+      answer = a - b;
+    }
+    question = `${a} ${op} ${b} = ?`;
+  } else if (level === 1) {
+    // 小学: 2-digit +/-, simple ×, simple ÷
+    const ops = ['+','-','*','/'];
+    op = ops[Math.floor(Math.random() * 4)];
+    switch(op) {
+      case '+':
+        a = Math.floor(Math.random() * 90) + 10; b = Math.floor(Math.random() * 90) + 10;
+        answer = a + b; break;
+      case '-':
+        a = Math.floor(Math.random() * 90) + 10; b = Math.floor(Math.random() * a) + 1;
+        answer = a - b; break;
+      case '*':
+        a = Math.floor(Math.random() * 9) + 1; b = Math.floor(Math.random() * 9) + 1;
+        answer = a * b; break;
+      case '/':
+        b = Math.floor(Math.random() * 8) + 2; answer = Math.floor(Math.random() * 9) + 1; a = b * answer;
+        break;
+    }
+    question = `${a} ${op} ${b} = ?`;
+  } else if (level === 2) {
+    // 初中: larger numbers, fractions, percentages
+    const r = Math.random();
+    if (r < 0.5) {
+      op = ['+','-','*'][Math.floor(Math.random() * 3)];
+      a = Math.floor(Math.random() * 900) + 100; b = Math.floor(Math.random() * 900) + 100;
+      if (op === '+') answer = a + b;
+      else if (op === '-') { if (b > a) [a,b]=[b,a]; answer = a - b; }
+      else { a = Math.floor(Math.random() * 90) + 10; b = Math.floor(Math.random() * 20) + 2; answer = a * b; }
+      question = `${a} ${op} ${b} = ?`;
+    } else if (r < 0.75) {
+      // Percentage
+      a = Math.floor(Math.random() * 900) + 100;
+      b = [10, 20, 25, 30, 50, 75][Math.floor(Math.random() * 6)];
+      answer = Math.round(a * b / 100);
+      question = `${a} 的 ${b}% 是多少？`;
+    } else {
+      // Simple fraction
+      const nums = [2,3,4,5,8,10];
+      const den = nums[Math.floor(Math.random() * nums.length)];
+      const num = Math.floor(Math.random() * (den - 1)) + 1;
+      a = Math.floor(Math.random() * 200) + 40;
+      answer = Math.round(a * num / den);
+      const fracLabels = {2:'二分之一',3:'三分之一',4:'四分之一',5:'五分之一',8:'八分之一',10:'十分之一'};
+      const label = num === 1 ? fracLabels[den] : `${num}/${den}`;
+      question = `${a} 的 ${label} 是多少？`;
+    }
+  } else {
+    // 高中及以上: algebra, exponents, roots, complex math
+    const r = Math.random();
+    if (r < 0.3) {
+      // Solve for x: ax + b = c
+      a = Math.floor(Math.random() * 9) + 2;
+      answer = Math.floor(Math.random() * 20) + 1;
+      b = Math.floor(Math.random() * 40) - 20;
+      const c = a * answer + b;
+      const bStr = b >= 0 ? `+ ${b}` : `- ${Math.abs(b)}`;
+      question = `解方程: ${a}x ${bStr} = ${c}, x = ?`;
+    } else if (r < 0.6) {
+      // Square/cube
+      a = Math.floor(Math.random() * 15) + 2;
+      const exp = [2, 2, 2, 3][Math.floor(Math.random() * 4)];
+      answer = exp === 2 ? a * a : a * a * a;
+      question = `${a}${exp === 2 ? '²' : '³'} = ?`;
+    } else {
+      // √ or complex expression
+      const squares = [4,9,16,25,36,49,64,81,100,121,144,169,196,225];
+      answer = Math.floor(Math.random() * 12) + 2;
+      a = answer * answer;
+      question = `√${a} = ?`;
+    }
+  }
+
+  return {
+    type: 'math',
+    typeLabel: level <= 1 ? '🧮 数学计算' : (level <= 2 ? '📐 数学运算' : '🔢 数学挑战'),
+    question,
+    answer,
+    options: genMathOptions(answer, level)
+  };
+}
+
+function genMathOptions(answer, level) {
+  const opts = new Set([String(answer)]);
+  const range = level <= 1 ? 5 : (level <= 2 ? 15 : 30);
+  while (opts.size < 4) {
+    const offset = Math.floor(Math.random() * range) + 1;
+    const sign = Math.random() > 0.5 ? 1 : -1;
+    const fake = answer + sign * offset;
+    if (fake >= 0 && fake !== answer && String(fake) !== String(answer)) opts.add(String(fake));
+  }
+  return shuffle([...opts]);
+}
+
+// --- Chinese: Pinyin (幼儿园/小学) ---
+const PINYIN_EASY = [
+  { word: '苹果', pinyin: 'píng guǒ' }, { word: '太阳', pinyin: 'tài yáng' },
+  { word: '月亮', pinyin: 'yuè liàng' },   { word: '学校', pinyin: 'xué xiào' },
+  { word: '老师', pinyin: 'lǎo shī' },     { word: '同学', pinyin: 'tóng xué' },
+  { word: '朋友', pinyin: 'péng yǒu' },    { word: '电脑', pinyin: 'diàn nǎo' },
+  { word: '大象', pinyin: 'dà xiàng' },     { word: '小猫', pinyin: 'xiǎo māo' },
+  { word: '花朵', pinyin: 'huā duǒ' },      { word: '大海', pinyin: 'dà hǎi' },
+  { word: '春天', pinyin: 'chūn tiān' },    { word: '快乐', pinyin: 'kuài lè' },
+  { word: '飞机', pinyin: 'fēi jī' },       { word: '火车', pinyin: 'huǒ chē' },
+  { word: '草地', pinyin: 'cǎo dì' },       { word: '天空', pinyin: 'tiān kōng' },
+  { word: '星星', pinyin: 'xīng xīng' },    { word: '高山', pinyin: 'gāo shān' },
+  { word: '河流', pinyin: 'hé liú' },       { word: '森林', pinyin: 'sēn lín' },
+  { word: '音乐', pinyin: 'yīn yuè' },      { word: '运动', pinyin: 'yùn dòng' },
+  { word: '动物', pinyin: 'dòng wù' },      { word: '植物', pinyin: 'zhí wù' },
+  { word: '颜色', pinyin: 'yán sè' },       { word: '天气', pinyin: 'tiān qì' },
+];
+
+const PINYIN_HARD = [
+  { word: '翱翔', pinyin: 'áo xiáng' },     { word: '磅礴', pinyin: 'páng bó' },
+  { word: '璀璨', pinyin: 'cuǐ càn' },       { word: '荡漾', pinyin: 'dàng yàng' },
+  { word: '翡翠', pinyin: 'fěi cuì' },       { word: '旮旯', pinyin: 'gā lá' },
+  { word: '浩瀚', pinyin: 'hào hàn' },       { word: '荆棘', pinyin: 'jīng jí' },
+  { word: '慷慨', pinyin: 'kāng kǎi' },      { word: '玲珑', pinyin: 'líng lóng' },
+  { word: '酝酿', pinyin: 'yùn niàng' },     { word: '斟酌', pinyin: 'zhēn zhuó' },
+  { word: '尴尬', pinyin: 'gān gà' },        { word: '徘徊', pinyin: 'pái huái' },
+  { word: '蹒跚', pinyin: 'pán shān' },      { word: '崎岖', pinyin: 'qí qū' },
+  { word: '囫囵', pinyin: 'hú lún' },        { word: '饕餮', pinyin: 'tāo tiè' },
+];
+
+function genPinyinQ(level) {
+  const bank = level <= 1 ? PINYIN_EASY : PINYIN_HARD;
+  const item = bank[Math.floor(Math.random() * bank.length)];
+  return {
+    type: 'pinyin',
+    typeLabel: level <= 1 ? '📝 拼音选择' : '🔤 汉字拼音',
+    question: `"${item.word}" 的拼音是？`,
+    answer: item.pinyin,
+    options: genPinyinOptions(item.pinyin, bank)
+  };
+}
+
+function genPinyinOptions(answer, bank) {
+  const opts = new Set([answer]);
+  while (opts.size < 4) {
+    const d = bank[Math.floor(Math.random() * bank.length)].pinyin;
+    if (d !== answer) opts.add(d);
+  }
+  return shuffle([...opts]);
+}
+
+// --- Chinese: Idiom Fill-in-the-blank ---
+const IDIOM_EASY = [
+  { full: '画蛇添足', blank: 1, answer: '蛇', distractors: ['龙','马','虫'] },
+  { full: '守株待兔', blank: 2, answer: '待', distractors: ['等','候','停'] },
+  { full: '亡羊补牢', blank: 1, answer: '羊', distractors: ['牛','马','猪'] },
+  { full: '掩耳盗铃', blank: 0, answer: '掩', distractors: ['捂','盖','遮'] },
+  { full: '画龙点睛', blank: 0, answer: '画', distractors: ['写','描','绘'] },
+  { full: '对牛弹琴', blank: 0, answer: '对', distractors: ['给','向','朝'] },
+  { full: '井底之蛙', blank: 0, answer: '井', distractors: ['洞','坑','穴'] },
+  { full: '一箭双雕', blank: 1, answer: '箭', distractors: ['石','枪','刀'] },
+  { full: '一鸣惊人', blank: 1, answer: '鸣', distractors: ['叫','喊','啼'] },
+  { full: '百发百中', blank: 1, answer: '发', distractors: ['射','放','打'] },
+  { full: '狐假虎威', blank: 1, answer: '假', distractors: ['借','伪','虚'] },
+  { full: '杯弓蛇影', blank: 1, answer: '弓', distractors: ['箭','刀','枪'] },
+  { full: '叶公好龙', blank: 2, answer: '好', distractors: ['爱','喜','乐'] },
+];
+
+const IDIOM_MEDIUM = [
+  { full: '刻舟求剑', blank: 1, answer: '舟', distractors: ['船','艇','舰'] },
+  { full: '胸有成竹', blank: 2, answer: '成', distractors: ['有','长','得'] },
+  { full: '自相矛盾', blank: 0, answer: '自', distractors: ['互','相','他'] },
+  { full: '滥竽充数', blank: 1, answer: '竽', distractors: ['笛','箫','笙'] },
+  { full: '凿壁偷光', blank: 0, answer: '凿', distractors: ['挖','撬','钻'] },
+  { full: '破釜沉舟', blank: 1, answer: '釜', distractors: ['锅','碗','鼎'] },
+  { full: '卧薪尝胆', blank: 0, answer: '卧', distractors: ['躺','睡','坐'] },
+  { full: '闻鸡起舞', blank: 0, answer: '闻', distractors: ['听','看','见'] },
+  { full: '悬梁刺股', blank: 1, answer: '梁', distractors: ['柱','墙','树'] },
+  { full: '负荆请罪', blank: 1, answer: '荆', distractors: ['花','草','杖'] },
+  { full: '纸上谈兵', blank: 2, answer: '谈', distractors: ['说','讲','论'] },
+  { full: '指鹿为马', blank: 1, answer: '鹿', distractors: ['马','牛','羊'] },
+  { full: '背水一战', blank: 1, answer: '水', distractors: ['山','河','江'] },
+  { full: '退避三舍', blank: 3, answer: '舍', distractors: ['里','步','尺'] },
+];
+
+function genIdiomQ(level) {
+  const bank = level <= 1 ? IDIOM_EASY : IDIOM_MEDIUM;
+  const item = bank[Math.floor(Math.random() * bank.length)];
+  const chars = item.full.split('');
+  const blanked = [...chars];
+  blanked[item.blank] = '___';
+  return {
+    type: 'idiom',
+    typeLabel: '🏮 成语填空',
+    question: `"${blanked.join('')}" — 空缺处应填？`,
+    answer: item.answer,
+    options: shuffle([item.answer, ...item.distractors])
+  };
+}
+
+// --- Chinese: Poetry (高中) ---
+const POETRY_BANK = [
+  { question: '"床前明月光" 的作者是？', answer: '李白', distractors: ['杜甫','白居易','王维'] },
+  { question: '"春眠不觉晓" 的作者是？', answer: '孟浩然', distractors: ['李白','王维','杜甫'] },
+  { question: '"锄禾日当午" 的作者是？', answer: '李绅', distractors: ['李白','杜甫','白居易'] },
+  { question: '"白日依山尽" 的作者是？', answer: '王之涣', distractors: ['李白','王维','孟浩然'] },
+  { question: '"离离原上草" 的作者是？', answer: '白居易', distractors: ['李白','杜甫','李商隐'] },
+  { question: '"大漠孤烟直" 的作者是？', answer: '王维', distractors: ['李白','杜甫','岑参'] },
+  { question: '"两个黄鹂鸣翠柳" 的作者是？', answer: '杜甫', distractors: ['李白','白居易','王维'] },
+  { question: '"清明时节雨纷纷" 的作者是？', answer: '杜牧', distractors: ['杜甫','李白','王维'] },
+  { question: '"独在异乡为异客" 的作者是？', answer: '王维', distractors: ['李白','杜甫','孟浩然'] },
+  { question: '"千山鸟飞绝" 的作者是？', answer: '柳宗元', distractors: ['李白','杜甫','王维'] },
+  { question: '"春蚕到死丝方尽" 的作者是？', answer: '李商隐', distractors: ['李白','杜甫','杜牧'] },
+  { question: '"但愿人长久" 的作者是？', answer: '苏轼', distractors: ['李白','杜甫','辛弃疾'] },
+  { question: '"天生我材必有用" 出自谁的笔下？', answer: '李白', distractors: ['杜甫','白居易','苏轼'] },
+  { question: '《静夜思》的作者是？', answer: '李白', distractors: ['杜甫','王维','白居易'] },
+  { question: '"春风又绿江南岸" 的作者是？', answer: '王安石', distractors: ['苏轼','李白','杜甫'] },
+  { question: '"醉卧沙场君莫笑" 的作者是？', answer: '王翰', distractors: ['李白','岑参','王昌龄'] },
+  { question: '"采菊东篱下" 的作者是？', answer: '陶渊明', distractors: ['李白','王维','孟浩然'] },
+  { question: '"落霞与孤鹜齐飞" 出自？', answer: '《滕王阁序》', distractors: ['《岳阳楼记》','《醉翁亭记》','《赤壁赋》'] },
+];
+
+function genPoetryQ(level) {
+  const item = POETRY_BANK[Math.floor(Math.random() * POETRY_BANK.length)];
+  return {
+    type: 'poetry',
+    typeLabel: level >= 4 ? '📜 古典诗词' : '📜 诗词知识',
+    question: item.question,
+    answer: item.answer,
+    options: shuffle([item.answer, ...item.distractors])
+  };
+}
+
+// --- Chinese: Literature (大学) ---
+const LITERATURE_BANK = [
+  { question: '《红楼梦》的作者是？', answer: '曹雪芹', distractors: ['吴承恩','罗贯中','施耐庵'] },
+  { question: '《西游记》的作者是？', answer: '吴承恩', distractors: ['曹雪芹','罗贯中','施耐庵'] },
+  { question: '《三国演义》的作者是？', answer: '罗贯中', distractors: ['曹雪芹','吴承恩','施耐庵'] },
+  { question: '《水浒传》的作者是？', answer: '施耐庵', distractors: ['曹雪芹','吴承恩','罗贯中'] },
+  { question: '孙悟空使用的武器是？', answer: '金箍棒', distractors: ['方天画戟','青龙偃月刀','丈八蛇矛'] },
+  { question: '林黛玉是《___》中的角色？', answer: '红楼梦', distractors: ['西游记','水浒传','三国演义'] },
+  { question: '诸葛亮是《___》中的人物？', answer: '三国演义', distractors: ['水浒传','红楼梦','西游记'] },
+  { question: '武松打虎出自《___》？', answer: '水浒传', distractors: ['三国演义','西游记','红楼梦'] },
+  { question: '贾宝玉与谁的爱情故事最为著名？', answer: '林黛玉', distractors: ['薛宝钗','王熙凤','史湘云'] },
+  { question: '唐僧取经的出发地是？', answer: '长安', distractors: ['洛阳','南京','北京'] },
+  { question: '"桃园三结义"中不含谁？', answer: '曹操', distractors: ['刘备','关羽','张飞'] },
+  { question: '《论语》记录的是谁的言行？', answer: '孔子', distractors: ['孟子','老子','庄子'] },
+  { question: '"温故而知新"出自？', answer: '《论语》', distractors: ['《孟子》','《道德经》','《庄子》'] },
+  { question: '中国第一部诗歌总集是？', answer: '《诗经》', distractors: ['《楚辞》','《唐诗三百首》','《乐府诗集》'] },
+  { question: '《水浒传》中有多少位好汉？', answer: '108', distractors: ['100','120','99'] },
+  { question: '"草船借箭"是谁的计谋？', answer: '诸葛亮', distractors: ['周瑜','司马懿','曹操'] },
+  { question: '"红楼梦"又名？', answer: '《石头记》', distractors: ['《金陵十二钗》','《大观园》','《风月宝鉴》'] },
+  { question: '李白的号是？', answer: '青莲居士', distractors: ['香山居士','东坡居士','六一居士'] },
+  { question: '杜甫被称为？', answer: '诗圣', distractors: ['诗仙','诗佛','诗鬼'] },
+  { question: '《史记》的作者是？', answer: '司马迁', distractors: ['班固','司马光','陈寿'] },
+];
+
+function genLiteratureQ(level) {
+  const item = LITERATURE_BANK[Math.floor(Math.random() * LITERATURE_BANK.length)];
+  return {
+    type: 'literature',
+    typeLabel: level >= 5 ? '📖 国学经典' : '📖 文学常识',
+    question: item.question,
+    answer: item.answer,
+    options: shuffle([item.answer, ...item.distractors])
+  };
+}
+
+// --- Chinese: Classical Knowledge (博士) ---
+const CLASSICS_BANK = [
+  { question: '"道可道，非常道"出自？', answer: '《道德经》', distractors: ['《论语》','《庄子》','《易经》'] },
+  { question: '"己所不欲，勿施于人"出自？', answer: '《论语》', distractors: ['《孟子》','《道德经》','《大学》'] },
+  { question: '"兼爱非攻"是谁的主张？', answer: '墨子', distractors: ['孔子','老子','韩非子'] },
+  { question: '中国第一部纪传体通史是？', answer: '《史记》', distractors: ['《汉书》','《资治通鉴》','《春秋》'] },
+  { question: '"天行健，君子以自强不息"出自？', answer: '《易经》', distractors: ['《论语》','《道德经》','《诗经》'] },
+  { question: '"路漫漫其修远兮"出自？', answer: '《离骚》', distractors: ['《九歌》','《天问》','《九章》'] },
+  { question: '《孙子兵法》的作者是？', answer: '孙武', distractors: ['孙膑','吴起','韩信'] },
+  { question: '"不以规矩，不能成方圆"出自？', answer: '《孟子》', distractors: ['《论语》','《荀子》','《韩非子》'] },
+  { question: '玄奘是哪个朝代的僧人？', answer: '唐代', distractors: ['宋代','明代','元代'] },
+  { question: '《聊斋志异》的作者是？', answer: '蒲松龄', distractors: ['吴敬梓','曹雪芹','纪晓岚'] },
+  { question: '"天下兴亡，匹夫有责"出自谁？', answer: '顾炎武', distractors: ['黄宗羲','王夫之','林则徐'] },
+  { question: '《资治通鉴》的作者是？', answer: '司马光', distractors: ['司马迁','班固','欧阳修'] },
+];
+
+function genClassicsQ() {
+  const item = CLASSICS_BANK[Math.floor(Math.random() * CLASSICS_BANK.length)];
+  return {
+    type: 'classics',
+    typeLabel: '🔬 国学精深',
+    question: item.question,
+    answer: item.answer,
+    options: shuffle([item.answer, ...item.distractors])
+  };
+}
+
+// --- English Questions by Level ---
+const ENGLISH_WORDS = {
+  0: [ // 幼儿园: very basic
+    { en: 'apple', zh: '苹果' },{ en: 'cat', zh: '猫' },{ en: 'dog', zh: '狗' },
+    { en: 'book', zh: '书' },{ en: 'sun', zh: '太阳' },{ en: 'moon', zh: '月亮' },
+    { en: 'tree', zh: '树' },{ en: 'red', zh: '红色' },{ en: 'run', zh: '跑' },
+    { en: 'eat', zh: '吃' },{ en: 'happy', zh: '开心' },{ en: 'big', zh: '大' },
+    { en: 'small', zh: '小' },{ en: 'bird', zh: '鸟' },{ en: 'fish', zh: '鱼' },
+    { en: 'water', zh: '水' },{ en: 'star', zh: '星星' },{ en: 'one', zh: '一' },
+  ],
+  1: [ // 小学: everyday words
+    { en: 'school', zh: '学校' },{ en: 'teacher', zh: '老师' },{ en: 'friend', zh: '朋友' },
+    { en: 'family', zh: '家庭' },{ en: 'flower', zh: '花' },{ en: 'river', zh: '河流' },
+    { en: 'mountain', zh: '山' },{ en: 'animal', zh: '动物' },{ en: 'beautiful', zh: '美丽' },
+    { en: 'yesterday', zh: '昨天' },{ en: 'tomorrow', zh: '明天' },{ en: 'weather', zh: '天气' },
+    { en: 'doctor', zh: '医生' },{ en: 'music', zh: '音乐' },{ en: 'science', zh: '科学' },
+    { en: 'travel', zh: '旅行' },{ en: 'kitchen', zh: '厨房' },{ en: 'garden', zh: '花园' },
+    { en: 'summer', zh: '夏天' },{ en: 'winter', zh: '冬天' },
+  ],
+  2: [ // 初中: academic
+    { en: 'environment', zh: '环境' },{ en: 'government', zh: '政府' },{ en: 'education', zh: '教育' },
+    { en: 'technology', zh: '技术' },{ en: 'experience', zh: '经验' },{ en: 'important', zh: '重要' },
+    { en: 'different', zh: '不同' },{ en: 'communicate', zh: '交流' },{ en: 'population', zh: '人口' },
+    { en: 'economy', zh: '经济' },{ en: 'culture', zh: '文化' },{ en: 'tradition', zh: '传统' },
+    { en: 'accident', zh: '事故' },{ en: 'opportunity', zh: '机会' },{ en: 'responsibility', zh: '责任' },
+    { en: 'knowledge', zh: '知识' },{ en: 'achievement', zh: '成就' },{ en: 'independent', zh: '独立' },
+    { en: 'challenge', zh: '挑战' },{ en: 'volunteer', zh: '志愿者' },
+  ],
+  3: [ // 高中: advanced
+    { en: 'sophisticated', zh: '精密的' },{ en: 'phenomenon', zh: '现象' },{ en: 'controversial', zh: '有争议的' },
+    { en: 'significance', zh: '重要性' },{ en: 'contemporary', zh: '当代的' },{ en: 'consequently', zh: '因此' },
+    { en: 'nevertheless', zh: '然而' },{ en: 'extraordinary', zh: '非凡的' },{ en: 'comprehensive', zh: '全面的' },
+    { en: 'inevitable', zh: '不可避免的' },{ en: 'predominantly', zh: '主要地' },{ en: 'considerable', zh: '相当大的' },
+    { en: 'fundamental', zh: '根本的' },{ en: 'perspective', zh: '视角' },{ en: 'consciousness', zh: '意识' },
+    { en: 'deteriorate', zh: '恶化' },{ en: 'exaggerate', zh: '夸大' },{ en: 'hypothesize', zh: '假设' },
+  ],
+  4: [ // 大学: professional
+    { en: 'paradigm', zh: '范式' },{ en: 'methodology', zh: '方法论' },{ en: 'empirical', zh: '实证的' },
+    { en: 'quantitative', zh: '定量的' },{ en: 'qualitative', zh: '定性的' },{ en: 'juxtaposition', zh: '并置' },
+    { en: 'epistemology', zh: '认识论' },{ en: 'ontology', zh: '本体论' },{ en: 'hegemony', zh: '霸权' },
+    { en: 'dichotomy', zh: '二分法' },{ en: 'pragmatic', zh: '实用主义的' },{ en: 'synthesis', zh: '综合' },
+    { en: 'autonomous', zh: '自主的' },{ en: 'reciprocal', zh: '互惠的' },{ en: 'exponential', zh: '指数的' },
+    { en: 'ubiquitous', zh: '无处不在的' },{ en: 'conundrum', zh: '难题' },{ en: 'delineate', zh: '描绘' },
+  ],
+  5: [ // 博士: expert
+    { en: 'hermeneutics', zh: '诠释学' },{ en: 'perspicacious', zh: '敏锐的' },{ en: 'obfuscate', zh: '混淆' },
+    { en: 'sesquipedalian', zh: '冗长的' },{ en: 'defenestration', zh: '抛出窗外' },{ en: 'callipygian', zh: '臀部优美的' },
+    { en: 'serendipity', zh: '意外发现' },{ en: 'quintessential', zh: '精髓的' },{ en: 'idiosyncratic', zh: '特质的' },
+    { en: 'antediluvian', zh: '古老的' },{ en: 'magnanimous', zh: '宽宏大量的' },{ en: 'pusillanimous', zh: '胆小的' },
+    { en: 'surreptitious', zh: '秘密的' },{ en: 'mellifluous', zh: '甜美的' },{ en: 'ephemeral', zh: '短暂的' },
+    { en: 'vicissitude', zh: '变迁' },{ en: 'sycophant', zh: '谄媚者' },{ en: 'ameliorate', zh: '改善' },
+  ],
+};
+
+function genEnglishQ(level) {
+  const bank = ENGLISH_WORDS[level] || ENGLISH_WORDS[2];
+  const item = bank[Math.floor(Math.random() * bank.length)];
+  const toChinese = Math.random() > 0.5;
+
+  const levelLabel = level <= 0 ? '🌍 英语启蒙' : (level <= 1 ? '🌍 英语基础' : (level <= 2 ? '🌍 英语进阶' : (level <= 3 ? '🌍 英语提高' : (level <= 4 ? '🌍 专业英语' : '🌍 学术英语'))));
+
+  if (toChinese) {
+    return {
+      type: 'english',
+      typeLabel: levelLabel,
+      question: `"${item.en}" 的中文意思是？`,
+      answer: item.zh,
+      options: genEnglishDistractors(item.zh, bank, 'zh')
+    };
+  } else {
+    return {
+      type: 'english',
+      typeLabel: levelLabel,
+      question: `"${item.zh}" 的英文是？`,
+      answer: item.en,
+      options: genEnglishDistractors(item.en, bank, 'en')
+    };
+  }
+}
+
+function genEnglishDistractors(answer, bank, field) {
+  const opts = new Set([answer]);
+  while (opts.size < 4) {
+    const d = bank[Math.floor(Math.random() * bank.length)][field];
+    if (d !== answer) opts.add(d);
+  }
+  return shuffle([...opts]);
+}
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// ============ OBSTACLES ============
+const OBSTACLE_TYPES = {
+  BOMB: 'bomb',
+  BROKEN_CAR: 'broken_car',
+  COIN: 'coin',
+  QUESTION: 'question'
+};
+
+class Obstacle {
+  constructor(type, lane, y, questionData=null) {
+    this.type = type;
+    this.lane = lane; // 0, 1, 2
+    this.x = LANE_CENTERS[lane];
+    this.y = y;
+    this.w = 40;
+    this.h = 40;
+    this.questionData = questionData;
+    this.collected = false;
+    this.animTimer = 0;
+  }
+
+  getBounds() {
+    return {
+      x: this.x - this.w/2,
+      y: this.y - this.h/2,
+      w: this.w,
+      h: this.h
+    };
+  }
+
+  update(dt) {
+    this.animTimer += dt;
+  }
+
+  draw(ctx) {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+
+    switch (this.type) {
+      case OBSTACLE_TYPES.BOMB:
+        this.drawBomb(ctx);
+        break;
+      case OBSTACLE_TYPES.BROKEN_CAR:
+        this.drawBrokenCar(ctx);
+        break;
+      case OBSTACLE_TYPES.COIN:
+        this.drawCoin(ctx);
+        break;
+      case OBSTACLE_TYPES.QUESTION:
+        this.drawQuestionBubble(ctx);
+        break;
+    }
+    ctx.restore();
+  }
+
+  drawBomb(ctx) {
+    // Bomb body - dark circle
+    const bob = Math.sin(this.animTimer * 6) * 2;
+    ctx.fillStyle = '#333';
+    ctx.beginPath();
+    ctx.arc(0, 0, 16, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Fuse
+    ctx.strokeStyle = '#8B4513';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, -16);
+    ctx.quadraticCurveTo(10, -24, 6 + bob, -28);
+    ctx.stroke();
+
+    // Spark
+    ctx.fillStyle = '#FF6'; ctx.beginPath();
+    ctx.arc(6 + bob, -28, 4, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#F90'; ctx.beginPath();
+    ctx.arc(6 + bob, -28, 2.5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#FFF'; ctx.beginPath();
+    ctx.arc(6 + bob, -28, 1.2, 0, Math.PI*2); ctx.fill();
+
+    // Skull-like highlight
+    ctx.fillStyle = '#555'; ctx.beginPath();
+    ctx.arc(-4, -3, 5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#555'; ctx.beginPath();
+    ctx.arc(4, -3, 5, 0, Math.PI*2); ctx.fill();
+  }
+
+  drawBrokenCar(ctx) {
+    // Warning triangle
+    ctx.fillStyle = '#FFD600';
+    ctx.beginPath();
+    ctx.moveTo(0, -18);
+    ctx.lineTo(-16, 12);
+    ctx.lineTo(16, 12);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#E65100';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Exclamation mark in triangle
+    ctx.fillStyle = '#000';
+    ctx.font = 'bold 18px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('!', 0, 2);
+  }
+
+  drawCoin(ctx) {
+    const scale = 1 + Math.sin(this.animTimer * 4) * 0.1;
+    ctx.scale(scale, scale);
+
+    // Outer ring
+    ctx.fillStyle = '#FFD700';
+    ctx.beginPath();
+    ctx.arc(0, 0, 15, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#B8860B';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Inner circle
+    ctx.fillStyle = '#FFC107';
+    ctx.beginPath();
+    ctx.arc(0, 0, 11, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Dollar sign
+    ctx.fillStyle = '#B8860B';
+    ctx.font = 'bold 14px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('$', 0, 1);
+  }
+
+  drawQuestionBubble(ctx) {
+    const bob = Math.sin(this.animTimer * 3) * 3;
+
+    // Glow
+    const glowGrad = ctx.createRadialGradient(0, 0, 5, 0, 0, 28);
+    glowGrad.addColorStop(0, 'rgba(255,215,0,0.4)');
+    glowGrad.addColorStop(1, 'rgba(255,215,0,0)');
+    ctx.fillStyle = glowGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, 28, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Bubble body
+    ctx.fillStyle = '#FFF8E1';
+    ctx.beginPath();
+    ctx.arc(0, bob, 20, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#FFD700';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    // Question mark
+    ctx.fillStyle = '#FF8F00';
+    ctx.font = 'bold 22px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('?', 0, bob);
+
+    // Small star sparkles
+    const sparkles = [{x:-14,y:-12},{x:14,y:-8},{x:-8,y:14},{x:12,y:12}];
+    ctx.fillStyle = '#FFD700';
+    for (const s of sparkles) {
+      const sx = s.x + Math.sin(this.animTimer * 5 + s.x) * 2;
+      const sy = s.y + Math.cos(this.animTimer * 5 + s.y) * 2;
+      ctx.beginPath(); ctx.arc(sx, sy, 1.5, 0, Math.PI*2); ctx.fill();
+    }
+  }
+}
+
+// ============ PLAYER ============
+class Player {
+  constructor() {
+    this.lane = 1; // middle lane
+    this.targetLane = 1;
+    this.x = LANE_CENTERS[this.lane];
+    this.y = PLAYER_Y;
+    this.w = PLAYER_W;
+    this.h = PLAYER_H;
+    this.fuel = FUEL_MAX;
+    this.nitroCharges = 0;
+    this.nitroActive = false;
+    this.nitroTimer = 0;
+    this.slowed = false;
+    this.slowTimer = 0;
+    this.animTimer = 0;
+    this.combo = 0;
+  }
+
+  getBounds() {
+    return {
+      x: this.x - this.w/2,
+      y: this.y - this.h/2,
+      w: this.w,
+      h: this.h
+    };
+  }
+
+  update(dt, gameSpeed) {
+    this.animTimer += dt;
+
+    // Lane switching animation
+    const targetX = LANE_CENTERS[this.targetLane];
+    const dx = targetX - this.x;
+    const moveSpeed = 600;
+    if (Math.abs(dx) < 2) {
+      this.x = targetX;
+      this.lane = this.targetLane;
+    } else {
+      this.x += Math.sign(dx) * moveSpeed * dt;
+    }
+
+    // Fuel depletion
+    const burnRate = this.nitroActive ? FUEL_BURN_RATE * 0.5 : FUEL_BURN_RATE;
+    this.fuel -= burnRate * dt;
+    if (this.fuel < 0) this.fuel = 0;
+
+    // Nitro
+    if (this.nitroActive) {
+      this.nitroTimer -= dt;
+      if (this.nitroTimer <= 0) {
+        this.nitroActive = false;
+        this.nitroTimer = 0;
+      }
+    }
+
+    // Slow debuff
+    if (this.slowed) {
+      this.slowTimer -= dt;
+      if (this.slowTimer <= 0) {
+        this.slowed = false;
+        this.slowTimer = 0;
+      }
+    }
+  }
+
+  getCurrentSpeed() {
+    let speed = BASE_SPEED;
+    if (this.slowed) speed = SLOW_SPEED;
+    if (this.nitroActive) speed = BASE_SPEED * NITRO_SPEED_MULT;
+    return speed;
+  }
+
+  activateNitro() {
+    if (this.nitroCharges > 0 && !this.nitroActive) {
+      this.nitroCharges--;
+      this.nitroActive = true;
+      this.nitroTimer = NITRO_DURATION;
+      sfxNitro();
+      return true;
+    }
+    return false;
+  }
+
+  addFuel(amount) {
+    this.fuel = Math.min(FUEL_MAX, this.fuel + amount);
+  }
+
+  removeFuel(amount) {
+    this.fuel = Math.max(0, this.fuel - amount);
+  }
+
+  draw(ctx) {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+
+    // Nitro flame
+    if (this.nitroActive) {
+      this.drawNitroFlame(ctx);
+    }
+
+    // Normal exhaust
+    if (!this.nitroActive) {
+      ctx.fillStyle = '#888';
+      ctx.fillRect(-5, -this.h/2, 4, 8 + Math.random() * 4);
+      ctx.fillRect(1, -this.h/2, 4, 6 + Math.random() * 4);
+    }
+
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.beginPath();
+    ctx.ellipse(0, this.h/2 + 4, this.w/2, 6, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // Car body
+    const bodyGrad = ctx.createLinearGradient(0, -this.h/2, 0, this.h/2);
+    bodyGrad.addColorStop(0, '#FF5252');
+    bodyGrad.addColorStop(0.5, '#E53935');
+    bodyGrad.addColorStop(1, '#C62828');
+    ctx.fillStyle = bodyGrad;
+    this.roundRect(ctx, -this.w/2, -this.h/2 + 8, this.w, this.h - 16, 8);
+    ctx.fill();
+    ctx.strokeStyle = '#B71C1C';
+    ctx.lineWidth = 2;
+    this.roundRect(ctx, -this.w/2, -this.h/2 + 8, this.w, this.h - 16, 8);
+    ctx.stroke();
+
+    // Roof/cabin
+    const roofGrad = ctx.createLinearGradient(0, -8, 0, 16);
+    roofGrad.addColorStop(0, '#FF8A80');
+    roofGrad.addColorStop(1, '#E53935');
+    ctx.fillStyle = roofGrad;
+    this.roundRect(ctx, -14, -12, 28, 28, 6);
+    ctx.fill();
+    ctx.strokeStyle = '#C62828';
+    ctx.lineWidth = 1.5;
+    this.roundRect(ctx, -14, -12, 28, 28, 6);
+    ctx.stroke();
+
+    // Windows
+    ctx.fillStyle = '#81D4FA';
+    this.roundRect(ctx, -10, -9, 8, 12, 3); ctx.fill();
+    ctx.strokeStyle = '#4FC3F7';
+    ctx.lineWidth = 1;
+    this.roundRect(ctx, -10, -9, 8, 12, 3); ctx.stroke();
+
+    this.roundRect(ctx, 2, -9, 8, 12, 3); ctx.fill();
+    this.roundRect(ctx, 2, -9, 8, 12, 3); ctx.stroke();
+
+    // Racing stripe
+    ctx.fillStyle = '#FFF';
+    ctx.fillRect(-3, -this.h/2 + 10, 6, this.h - 20);
+
+    // Headlights (front = top in our view)
+    ctx.fillStyle = '#FFEB3B';
+    ctx.beginPath(); ctx.arc(-10, -this.h/2 + 12, 5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(10, -this.h/2 + 12, 5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#FFF';
+    ctx.beginPath(); ctx.arc(-10, -this.h/2 + 12, 2.5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(10, -this.h/2 + 12, 2.5, 0, Math.PI*2); ctx.fill();
+
+    // Tail lights
+    ctx.fillStyle = '#F44336';
+    ctx.beginPath(); ctx.arc(-10, this.h/2 - 12, 5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(10, this.h/2 - 12, 5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#FF8A80';
+    ctx.beginPath(); ctx.arc(-10, this.h/2 - 12, 2.5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(10, this.h/2 - 12, 2.5, 0, Math.PI*2); ctx.fill();
+
+    // Wheels
+    this.drawWheel(ctx, -this.w/2 + 1, -this.h/2 + 26);
+    this.drawWheel(ctx, this.w/2 - 1, -this.h/2 + 26);
+    this.drawWheel(ctx, -this.w/2 + 1, this.h/2 - 26);
+    this.drawWheel(ctx, this.w/2 - 1, this.h/2 - 26);
+
+    ctx.restore();
+  }
+
+  drawWheel(ctx, wx, wy) {
+    ctx.fillStyle = '#222';
+    ctx.beginPath();
+    ctx.arc(wx, wy, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Hub
+    ctx.fillStyle = '#888';
+    ctx.beginPath();
+    ctx.arc(wx, wy, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Spokes (rotate with animation)
+    ctx.strokeStyle = '#AAA';
+    ctx.lineWidth = 1;
+    const rotation = this.animTimer * 8;
+    for (let i = 0; i < 4; i++) {
+      const angle = rotation + i * Math.PI / 2;
+      ctx.beginPath();
+      ctx.moveTo(wx, wy);
+      ctx.lineTo(wx + Math.cos(angle) * 5, wy + Math.sin(angle) * 5);
+      ctx.stroke();
+    }
+  }
+
+  drawNitroFlame(ctx) {
+    const particles = 12;
+    for (let i = 0; i < particles; i++) {
+      const spread = (Math.random() - 0.5) * 20;
+      const length = 15 + Math.random() * 25;
+      const alpha = 0.4 + Math.random() * 0.6;
+
+      ctx.fillStyle = `rgba(100, 140, 255, ${alpha})`;
+      ctx.beginPath();
+      ctx.arc(spread, -this.h/2 - length * (0.3 + Math.random() * 0.7), 2 + Math.random() * 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Core flame
+    const flameGrad = ctx.createLinearGradient(0, -this.h/2, 0, -this.h/2 - 30);
+    flameGrad.addColorStop(0, '#E3F2FD');
+    flameGrad.addColorStop(0.3, '#90CAF9');
+    flameGrad.addColorStop(0.6, '#5C6BC0');
+    flameGrad.addColorStop(1, 'transparent');
+    ctx.fillStyle = flameGrad;
+    ctx.beginPath();
+    ctx.moveTo(-10, -this.h/2);
+    ctx.quadraticCurveTo(5, -this.h/2 - 20, 0, -this.h/2 - 35);
+    ctx.quadraticCurveTo(-5, -this.h/2 - 20, 10, -this.h/2);
+    ctx.fill();
+  }
+
+  roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+  }
+}
+
+// ============ GAME CLASS ============
+class Game {
+  constructor() {
+    this.state = STATE.MENU;
+    this.player = new Player();
+    this.obstacles = [];
+    this.particles = new ParticleSystem();
+    this.floatingTexts = [];
+    this.particles2 = new ParticleSystem(); // secondary system for extra effects
+    this.floatingTexts2 = [];
+
+    // Scrolling
+    this.roadOffset = 0;
+    this.bgOffset1 = 0;
+    this.bgOffset2 = 0;
+    this.bgOffset3 = 0;
+
+    // Timers
+    this.elapsedTime = 0;
+    this.obstacleTimer = 0;
+    this.questionTimer = 0;
+
+    // Countdown
+    this.startCountdown = 0;
+
+    // Question
+    this.currentQuestion = null;
+    this.questionTimeLeft = 0;
+    this.answerLocked = false;
+
+    // Score
+    this.score = 0;
+    this.totalCorrect = 0;
+    this.maxCombo = 0;
+
+    // Screen shake
+    this.shakeAmount = 0;
+    this.shakeDuration = 0;
+
+    // Best score
+    this.bestScore = parseInt(localStorage.getItem('studyrace_best') || '0');
+
+    // Input cooldowns
+    this.laneInputCooldown = 0;
+    this.nitroInputCooldown = 0;
+  }
+
+  start() {
+    initAudio();
+    this.player = new Player();
+    this.obstacles = [];
+    this.particles = new ParticleSystem();
+    this.floatingTexts = [];
+    this.particles2 = new ParticleSystem();
+    this.floatingTexts2 = [];
+    this.roadOffset = 0;
+    this.elapsedTime = 0;
+    this.obstacleTimer = 0;
+    this.questionTimer = 3; // first question appears after 3s
+    this.currentQuestion = null;
+    this.questionTimeLeft = 0;
+    this.answerLocked = false;
+    this.score = 0;
+    this.totalCorrect = 0;
+    this.maxCombo = 0;
+    this.shakeAmount = 0;
+    this.shakeDuration = 0;
+    this.startCountdown = 3; // 3-second countdown
+    this.state = STATE.PLAYING;
+    questionPanel.classList.remove('active');
+    document.getElementById('share-btn').classList.remove('show');
+  }
+
+  update(dt) {
+    // Clamp dt to avoid huge jumps
+    if (dt > 0.1) dt = 0.1;
+
+    // Update particles even in menu (for visual flair)
+    this.particles.update(dt);
+    this.particles2.update(dt);
+    for (let i = this.floatingTexts.length - 1; i >= 0; i--) {
+      this.floatingTexts[i].update(dt);
+      if (!this.floatingTexts[i].alive) this.floatingTexts.splice(i, 1);
+    }
+    for (let i = this.floatingTexts2.length - 1; i >= 0; i--) {
+      this.floatingTexts2[i].update(dt);
+      if (!this.floatingTexts2[i].alive) this.floatingTexts2.splice(i, 1);
+    }
+
+    if (this.state === STATE.MENU) {
+      this.updateMenu(dt);
+    } else if (this.state === STATE.PLAYING) {
+      this.updatePlaying(dt);
+    } else if (this.state === STATE.ANSWERING) {
+      this.updateAnswering(dt);
+    } else if (this.state === STATE.GAMEOVER) {
+      this.updateGameOver(dt);
+    }
+  }
+
+  updateMenu(dt) {
+    this.roadOffset += BASE_SPEED * 0.6 * dt;
+    this.bgOffset1 += 15 * dt;
+    this.bgOffset2 += 25 * dt;
+    this.bgOffset3 += 40 * dt;
+
+    // Auto-spawn some decorative obstacles
+  }
+
+  updatePlaying(dt) {
+    // Start countdown - pause game logic until countdown finishes
+    if (this.startCountdown > 0) {
+      this.startCountdown -= dt;
+      this.roadOffset += BASE_SPEED * 0.5 * dt;
+      this.bgOffset1 += 15 * dt;
+      this.bgOffset2 += 25 * dt;
+      this.bgOffset3 += 40 * dt;
+      return;
+    }
+
+    this.elapsedTime += dt;
+    this.score += Math.floor(10 * dt);
+
+    // Level-based scaling (obstacle frequency increases with level)
+    const levelIdx = getLevelIndex(this.score);
+
+    // Input handling
+    this.laneInputCooldown -= dt;
+    this.nitroInputCooldown -= dt;
+
+    if (this.laneInputCooldown <= 0) {
+      if (keys['ArrowLeft'] && this.player.targetLane > 0) {
+        this.player.targetLane--;
+        this.laneInputCooldown = 0.15;
+      }
+      if (keys['ArrowRight'] && this.player.targetLane < 2) {
+        this.player.targetLane++;
+        this.laneInputCooldown = 0.15;
+      }
+    }
+
+    if (this.nitroInputCooldown <= 0) {
+      if (keys[' ']) {
+        if (this.player.activateNitro()) {
+          this.nitroInputCooldown = 0.5;
+        }
+      }
+    }
+
+    // Update player
+    this.player.update(dt, this.getSpeed());
+
+    // Check game over
+    if (this.player.fuel <= 0) {
+      this.gameOver();
+      return;
+    }
+
+    const speed = this.getSpeed();
+
+    // Scroll road
+    this.roadOffset += speed * dt;
+    // Parallax backgrounds
+    this.bgOffset1 += speed * 0.15 * dt;
+    this.bgOffset2 += speed * 0.3 * dt;
+    this.bgOffset3 += speed * 0.5 * dt;
+
+    // Spawn obstacles
+    this.obstacleTimer += dt;
+    const obstacleInterval = Math.max(0.8, 2.5 - levelIdx * 0.3);
+    if (this.obstacleTimer >= obstacleInterval) {
+      this.obstacleTimer = 0;
+      this.spawnObstacle();
+    }
+
+    // Spawn questions
+    this.questionTimer += dt;
+    const questionInterval = Math.max(4, 11 - levelIdx * 1.2);
+    if (this.questionTimer >= questionInterval) {
+      this.questionTimer = 0;
+      this.spawnQuestion();
+    }
+
+    // Update obstacles
+    for (let i = this.obstacles.length - 1; i >= 0; i--) {
+      const obs = this.obstacles[i];
+      obs.update(dt);
+      obs.y += speed * dt;
+
+      // Check collision
+      if (!obs.collected && this.checkCollision(this.player.getBounds(), obs.getBounds())) {
+        this.handleCollision(obs, i);
+      }
+
+      // Remove off-screen
+      if (obs.y > CANVAS_H + 80) {
+        this.obstacles.splice(i, 1);
+      }
+    }
+
+    // Update shake
+    if (this.shakeDuration > 0) {
+      this.shakeDuration -= dt;
+      this.shakeAmount = this.shakeDuration > 0 ? this.shakeAmount * 0.9 : 0;
+    }
+  }
+
+  updateAnswering(dt) {
+    // Update timer
+    this.questionTimeLeft -= dt;
+    if (this.questionTimeLeft <= 0 && !this.answerLocked) {
+      this.answerLocked = true;
+      this.handleWrongAnswer();
+    }
+
+    // Update timer bar
+    const pct = (this.questionTimeLeft / QUESTION_TIMER) * 100;
+    qTimerFill.style.width = pct + '%';
+    qTimerFill.className = '';
+    if (pct < 25) qTimerFill.className = 'danger';
+    else if (pct < 50) qTimerFill.className = 'warning';
+  }
+
+  updateGameOver(dt) {
+    this.roadOffset += 30 * dt;
+    if (keys[' '] || keys['Enter']) {
+      this.start();
+    }
+  }
+
+  getSpeed() {
+    return this.player.getCurrentSpeed();
+  }
+
+  spawnObstacle() {
+    const lane = Math.floor(Math.random() * 3);
+    // Don't spawn on same lane as an existing obstacle near the spawn point
+    const nearSpawn = this.obstacles.filter(o => o.y < 80);
+    const laneOccupied = nearSpawn.some(o => o.lane === lane);
+
+    // Pick type
+    const r = Math.random();
+    let type;
+    if (r < 0.3) type = OBSTACLE_TYPES.BOMB;
+    else if (r < 0.55) type = OBSTACLE_TYPES.BROKEN_CAR;
+    else type = OBSTACLE_TYPES.COIN;
+
+    // Coins can spawn on occupied lanes (they're good)
+    const finalLane = (type === OBSTACLE_TYPES.COIN || !laneOccupied) ? lane : (lane + 1) % 3;
+
+    this.obstacles.push(new Obstacle(type, finalLane, -80));
+  }
+
+  spawnQuestion() {
+    // Pick a lane not occupied near spawn
+    let lane = Math.floor(Math.random() * 3);
+    const nearSpawn = this.obstacles.filter(o => o.y < 80);
+    const occupied = new Set(nearSpawn.map(o => o.lane));
+    if (occupied.size >= 3) return; // all lanes busy
+    while (occupied.has(lane)) lane = (lane + 1) % 3;
+
+    // Generate question based on current level
+    const levelIdx = getLevelIndex(this.score);
+    const qData = genQuestion(levelIdx);
+    this.obstacles.push(new Obstacle(OBSTACLE_TYPES.QUESTION, lane, -80, qData));
+  }
+
+  checkCollision(a, b) {
+    const margin = 8; // forgiving hitbox
+    return (
+      a.x < b.x + b.w - margin &&
+      a.x + a.w > b.x + margin &&
+      a.y < b.y + b.h - margin &&
+      a.y + a.h > b.y + margin
+    );
+  }
+
+  handleCollision(obs, index) {
+    obs.collected = true;
+
+    switch (obs.type) {
+      case OBSTACLE_TYPES.BOMB:
+        if (this.player.nitroActive) {
+          // Destroy bomb!
+          this.particles.emit(obs.x, obs.y, 20, '#FF6D00', [0.3, 0.7], [80, 250], [2, 6]);
+          this.floatingTexts.push(new FloatingText(obs.x, obs.y, '+150', '#FFD700'));
+          this.score += 150;
+          sfxCoin();
+        } else {
+          // Hit!
+          this.player.removeFuel(FUEL_BOMB);
+          this.shakeAmount = 10;
+          this.shakeDuration = 0.4;
+          this.particles.emit(obs.x, obs.y, 15, '#FF1744', [0.3, 0.6], [60, 180], [2, 5]);
+          this.floatingTexts.push(new FloatingText(obs.x, obs.y, '-30⛽', '#F44336'));
+          sfxBomb();
+          if (this.player.fuel <= 0) this.gameOver();
+        }
+        break;
+
+      case OBSTACLE_TYPES.BROKEN_CAR:
+        if (this.player.nitroActive) {
+          this.particles.emit(obs.x, obs.y, 12, '#FF6D00', [0.2, 0.5], [60, 150]);
+          this.floatingTexts.push(new FloatingText(obs.x, obs.y, '+150', '#FFD700'));
+          this.score += 150;
+          sfxCoin();
+        } else {
+          this.player.slowed = true;
+          this.player.slowTimer = SLOW_DURATION;
+          this.particles.emit(obs.x, obs.y, 10, '#FFC107', [0.3, 0.5], [40, 120]);
+          this.floatingTexts.push(new FloatingText(obs.x, obs.y, '减速!', '#FF9800'));
+          playBeep(300, 0.2, 'sawtooth');
+        }
+        break;
+
+      case OBSTACLE_TYPES.COIN:
+        this.player.addFuel(FUEL_COIN);
+        this.score += 100;
+        this.particles.emit(obs.x, obs.y, 15, '#FFD700', [0.3, 0.6], [60, 200], [2, 5]);
+        this.floatingTexts.push(new FloatingText(obs.x, obs.y, '+100', '#FFD700'));
+        sfxCoin();
+        break;
+
+      case OBSTACLE_TYPES.QUESTION:
+        this.triggerQuestion(obs);
+        break;
+    }
+
+    if (obs.type !== OBSTACLE_TYPES.QUESTION) {
+      this.obstacles.splice(index, 1);
+    }
+  }
+
+  triggerQuestion(obs) {
+    this.state = STATE.ANSWERING;
+    this.currentQuestion = obs.questionData;
+    this.questionTimeLeft = QUESTION_TIMER;
+    this.answerLocked = false;
+
+    // Show question panel
+    qType.textContent = obs.questionData.typeLabel;
+    qText.textContent = obs.questionData.question;
+    qTimerFill.style.width = '100%';
+    qTimerFill.className = '';
+
+    qOptions.innerHTML = '';
+    obs.questionData.options.forEach((opt, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'q-btn';
+      btn.textContent = opt;
+      btn.addEventListener('click', () => this.submitAnswer(opt, btn));
+      // Prevent touch events from propagating
+      btn.addEventListener('touchstart', e => e.stopPropagation());
+      qOptions.appendChild(btn);
+    });
+
+    questionPanel.classList.add('active');
+
+    // Remove question obstacle from road
+    const idx = this.obstacles.indexOf(obs);
+    if (idx >= 0) this.obstacles.splice(idx, 1);
+  }
+
+  submitAnswer(answer, btnElement) {
+    if (this.answerLocked) return;
+    this.answerLocked = true;
+
+    const correct = String(answer) === String(this.currentQuestion.answer);
+
+    // Highlight correct/wrong
+    const buttons = qOptions.querySelectorAll('.q-btn');
+    buttons.forEach(b => {
+      if (String(b.textContent) === String(this.currentQuestion.answer)) {
+        b.classList.add('correct');
+      } else if (b === btnElement && !correct) {
+        b.classList.add('wrong');
+      }
+    });
+
+    if (correct) {
+      this.handleCorrectAnswer();
+    } else {
+      this.handleWrongAnswer();
+    }
+  }
+
+  handleCorrectAnswer() {
+    this.player.addFuel(FUEL_CORRECT);
+    this.player.nitroCharges = Math.min(NITRO_MAX, this.player.nitroCharges + 1);
+    this.player.combo++;
+    this.totalCorrect++;
+    if (this.player.combo > this.maxCombo) this.maxCombo = this.player.combo;
+
+    let points = 200;
+    if (this.player.combo >= 3) {
+      points += 300;
+      this.floatingTexts.push(new FloatingText(CANVAS_W/2, PLAYER_Y - 40, '连击! +300', '#FFD700', 1.5));
+    }
+
+    this.score += points;
+    this.floatingTexts2.push(new FloatingText(CANVAS_W/2, PLAYER_Y - 20, '✓ +' + points, '#4CAF50', 1.2));
+    this.particles2.emit(CANVAS_W/2, PLAYER_Y, 25, '#4CAF50', [0.4, 0.9], [80, 250], [2, 6]);
+
+    sfxCorrect();
+    setTimeout(() => this.resumeGame(), 800);
+  }
+
+  handleWrongAnswer() {
+    this.player.removeFuel(FUEL_WRONG);
+    this.player.combo = 0;
+
+    this.floatingTexts2.push(new FloatingText(CANVAS_W/2, PLAYER_Y - 20, '✗ 答错了', '#F44336', 1.0));
+    this.particles2.emit(CANVAS_W/2, PLAYER_Y, 12, '#F44336', [0.3, 0.6], [50, 150], [2, 4]);
+
+    sfxWrong();
+    setTimeout(() => {
+      if (this.player.fuel <= 0) {
+        this.gameOver();
+      } else {
+        this.resumeGame();
+      }
+    }, 800);
+  }
+
+  resumeGame() {
+    questionPanel.classList.remove('active');
+    this.currentQuestion = null;
+    this.state = STATE.PLAYING;
+  }
+
+  gameOver() {
+    this.state = STATE.GAMEOVER;
+    if (this.score > this.bestScore) {
+      this.bestScore = this.score;
+      localStorage.setItem('studyrace_best', this.bestScore);
+    }
+    questionPanel.classList.remove('active');
+    document.getElementById('share-btn').classList.add('show');
+    sfxWrong();
+  }
+
+  render() {
+    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+
+    // Apply screen shake
+    let shakeX = 0, shakeY = 0;
+    if (this.shakeDuration > 0) {
+      shakeX = (Math.random() - 0.5) * this.shakeAmount * 2;
+      shakeY = (Math.random() - 0.5) * this.shakeAmount * 2;
+    }
+
+    ctx.save();
+    ctx.translate(shakeX, shakeY);
+
+    this.drawBackground();
+    this.drawRoad();
+    this.drawObstacles();
+    this.drawPlayer();
+
+    // Particles (behind UI but in game space)
+    this.particles.draw(ctx);
+    this.particles2.draw(ctx);
+
+    ctx.restore();
+
+    // Floating texts (not affected by shake)
+    for (const ft of this.floatingTexts) ft.draw(ctx);
+    for (const ft of this.floatingTexts2) ft.draw(ctx);
+
+    // UI (not affected by shake)
+    this.drawUI();
+
+    // Start countdown overlay
+    if (this.startCountdown > 0) this.drawCountdown();
+
+    // Overlay screens
+    if (this.state === STATE.MENU) this.drawMenu();
+    if (this.state === STATE.GAMEOVER) this.drawGameOver();
+  }
+
+  drawBackground() {
+    // Sky gradient
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, CANVAS_H);
+    skyGrad.addColorStop(0, '#87CEEB');
+    skyGrad.addColorStop(0.3, '#B3E5FC');
+    skyGrad.addColorStop(0.7, '#E1F5FE');
+    skyGrad.addColorStop(1, '#FFF');
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+    // Clouds (parallax layer 1 - slowest)
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    this.drawCloud(60, (200 + this.bgOffset1) % (CANVAS_H + 100) - 50);
+    this.drawCloud(250, (400 + this.bgOffset1 * 0.8) % (CANVAS_H + 100) - 50);
+    this.drawCloud(380, (150 + this.bgOffset1 * 1.1) % (CANVAS_H + 100) - 50);
+
+    // Mountains (parallax layer 2)
+    ctx.fillStyle = '#81C784';
+    this.drawMountain(40, 300 + this.bgOffset2 % 300, 60, 150);
+    this.drawMountain(200, 280 + this.bgOffset2 * 0.9 % 300, 80, 180);
+    this.drawMountain(350, 310 + this.bgOffset2 * 1.1 % 300, 70, 160);
+
+    ctx.fillStyle = '#66BB6A';
+    this.drawMountain(120, 290 + this.bgOffset2 % 300, 50, 120);
+    this.drawMountain(300, 270 + this.bgOffset2 * 0.95 % 300, 55, 130);
+
+    // Green grass areas
+    ctx.fillStyle = '#4CAF50';
+    ctx.fillRect(0, 0, ROAD_LEFT, CANVAS_H);
+    ctx.fillRect(ROAD_RIGHT, 0, CANVAS_W - ROAD_RIGHT, CANVAS_H);
+
+    // Grass detail stripes
+    ctx.fillStyle = '#66BB6A';
+    for (let y = this.bgOffset3 % 60; y < CANVAS_H; y += 60) {
+      ctx.fillRect(10, y, 30, 20);
+      ctx.fillRect(CANVAS_W - 40, y + 30, 30, 20);
+    }
+
+    // Trees on grass
+    this.drawTree(20, (100 + this.bgOffset3 * 0.5) % (CANVAS_H + 80) - 40);
+    this.drawTree(55, (300 + this.bgOffset3 * 0.5) % (CANVAS_H + 80) - 40);
+    this.drawTree(30, (550 + this.bgOffset3 * 0.5) % (CANVAS_H + 80) - 40);
+    this.drawTree(CANVAS_W - 25, (200 + this.bgOffset3 * 0.5) % (CANVAS_H + 80) - 40);
+    this.drawTree(CANVAS_W - 55, (480 + this.bgOffset3 * 0.5) % (CANVAS_H + 80) - 40);
+    this.drawTree(CANVAS_W - 30, (700 + this.bgOffset3 * 0.5) % (CANVAS_H + 80) - 40);
+  }
+
+  drawCloud(x, y) {
+    ctx.beginPath();
+    ctx.arc(x, y, 20, 0, Math.PI * 2);
+    ctx.arc(x + 18, y - 8, 18, 0, Math.PI * 2);
+    ctx.arc(x + 35, y, 16, 0, Math.PI * 2);
+    ctx.arc(x + 15, y + 5, 15, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  drawMountain(x, y, w, h) {
+    ctx.beginPath();
+    ctx.moveTo(x - w/2, y);
+    ctx.lineTo(x, y - h);
+    ctx.lineTo(x + w/2, y);
+    ctx.closePath();
+    ctx.fill();
+    // Snow cap
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.beginPath();
+    ctx.moveTo(x - w/6, y - h * 0.7);
+    ctx.lineTo(x, y - h);
+    ctx.lineTo(x + w/6, y - h * 0.7);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  drawTree(x, y) {
+    // Trunk
+    ctx.fillStyle = '#8D6E63';
+    ctx.fillRect(x - 4, y, 8, 25);
+    // Canopy
+    ctx.fillStyle = '#388E3C';
+    ctx.beginPath();
+    ctx.arc(x, y - 5, 16, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#43A047';
+    ctx.beginPath();
+    ctx.arc(x - 5, y + 2, 12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x + 5, y + 2, 12, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  drawRoad() {
+    // Road base
+    ctx.fillStyle = '#555';
+    ctx.fillRect(ROAD_LEFT, 0, ROAD_WIDTH, CANVAS_H);
+
+    // Road edges (yellow lines)
+    ctx.fillStyle = '#FFD600';
+    ctx.fillRect(ROAD_LEFT - 4, 0, 4, CANVAS_H);
+    ctx.fillRect(ROAD_RIGHT, 0, 4, CANVAS_H);
+
+    // Shoulder
+    ctx.fillStyle = '#666';
+    ctx.fillRect(ROAD_LEFT - 8, 0, 4, CANVAS_H);
+    ctx.fillRect(ROAD_RIGHT + 4, 0, 4, CANVAS_H);
+
+    // Lane markings (white dashes)
+    const dashLen = 40;
+    const gapLen = 30;
+    const totalLen = dashLen + gapLen;
+    ctx.fillStyle = '#FFF';
+    for (let lane = 1; lane < 3; lane++) {
+      const lx = ROAD_LEFT + lane * LANE_WIDTH;
+      let y = (this.roadOffset % totalLen) - totalLen;
+      while (y < CANVAS_H + totalLen) {
+        ctx.fillRect(lx - 2, y, 4, dashLen);
+        y += totalLen;
+      }
+    }
+  }
+
+  drawObstacles() {
+    for (const obs of this.obstacles) {
+      obs.draw(ctx);
+    }
+  }
+
+  drawPlayer() {
+    this.player.draw(ctx);
+  }
+
+  drawUI() {
+    // Fuel bar background
+    const barX = 10, barY = 15, barW = 180, barH = 18;
+
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.beginPath();
+    ctx.roundRect(barX, barY, barW, barH, 9);
+    ctx.fill();
+
+    // Fuel bar fill
+    const fuelPct = this.player.fuel / FUEL_MAX;
+    let fuelColor;
+    if (fuelPct > 0.5) fuelColor = '#4CAF50';
+    else if (fuelPct > 0.2) fuelColor = '#FF9800';
+    else fuelColor = '#f44336';
+
+    if (fuelPct > 0) {
+      const fuelGrad = ctx.createLinearGradient(barX, 0, barX + barW * fuelPct, 0);
+      fuelGrad.addColorStop(0, fuelColor);
+      fuelGrad.addColorStop(1, fuelColor + 'CC');
+      ctx.fillStyle = fuelGrad;
+      ctx.beginPath();
+      ctx.roundRect(barX, barY, barW * fuelPct, barH, 9);
+      ctx.fill();
+    }
+
+    // Fuel label
+    ctx.fillStyle = '#FFF';
+    ctx.font = 'bold 10px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('⛽ ' + Math.floor(this.player.fuel) + '%', barX + barW/2, barY + 13);
+
+    // Warning flash when low
+    if (fuelPct <= 0.2 && this.state === STATE.PLAYING && Math.floor(this.elapsedTime * 4) % 2 === 0) {
+      ctx.fillStyle = 'rgba(244,67,54,0.3)';
+      ctx.beginPath();
+      ctx.roundRect(barX, barY, barW, barH, 9);
+      ctx.fill();
+    }
+
+    // Nitro indicators
+    for (let i = 0; i < NITRO_MAX; i++) {
+      const nx = barX + barW + 15 + i * 30;
+      const ny = barY + 2;
+      const active = i < this.player.nitroCharges;
+
+      ctx.fillStyle = active ? '#667eea' : 'rgba(255,255,255,0.3)';
+      ctx.beginPath();
+      ctx.roundRect(nx, ny, 26, 14, 7);
+      ctx.fill();
+
+      if (active) {
+        ctx.fillStyle = '#FFF';
+        ctx.font = 'bold 8px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('N₂O', nx + 13, ny + 10);
+      }
+    }
+
+    // Score
+    ctx.fillStyle = '#FFF';
+    ctx.font = 'bold 16px Arial';
+    ctx.textAlign = 'right';
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+    ctx.lineWidth = 3;
+    ctx.strokeText('⭐ ' + this.score, CANVAS_W - 12, 30);
+    ctx.fillText('⭐ ' + this.score, CANVAS_W - 12, 30);
+
+    // Level display
+    const lvlIdx = getLevelIndex(this.score);
+    const lvl = LEVELS[lvlIdx];
+    const nextLvl = LEVELS[Math.min(lvlIdx + 1, LEVELS.length - 1)];
+
+    // Level badge
+    const badgeX = CANVAS_W - 12, badgeY = 52;
+    ctx.fillStyle = lvl.color;
+    ctx.font = 'bold 13px Arial';
+    ctx.textAlign = 'right';
+    ctx.fillText(lvl.icon + ' ' + lvl.name, badgeX, badgeY);
+
+    // Progress to next level
+    if (lvlIdx < LEVELS.length - 1) {
+      const progressBarW = 120, progressBarH = 5;
+      const progressX = badgeX - progressBarW;
+      const progressY = badgeY + 8;
+      const startScore = lvl.threshold;
+      const endScore = nextLvl.threshold;
+      const progress = Math.min(1, (this.score - startScore) / (endScore - startScore));
+
+      ctx.fillStyle = 'rgba(0,0,0,0.4)';
+      ctx.beginPath();
+      ctx.roundRect(progressX, progressY, progressBarW, progressBarH, 2.5);
+      ctx.fill();
+
+      ctx.fillStyle = lvl.color;
+      ctx.beginPath();
+      ctx.roundRect(progressX, progressY, progressBarW * progress, progressBarH, 2.5);
+      ctx.fill();
+
+      // Next level hint
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.font = '9px Arial';
+      ctx.textAlign = 'right';
+      ctx.fillText(nextLvl.icon + ' ' + (endScore - this.score) + '分升级', badgeX, progressY + 12);
+    } else {
+      // Max level
+      ctx.fillStyle = '#FFD700';
+      ctx.font = 'bold 11px Arial';
+      ctx.textAlign = 'right';
+      ctx.fillText('🏆 最高等级!', badgeX, badgeY + 20);
+    }
+
+    // Speed indicator
+    if (this.player.nitroActive) {
+      ctx.fillStyle = '#64B5F6';
+      ctx.font = 'bold 14px Arial';
+      ctx.textAlign = 'right';
+      ctx.fillText('🔥 NITRO!', CANVAS_W - 12, 52);
+    } else if (this.player.slowed) {
+      ctx.fillStyle = '#FF9800';
+      ctx.font = 'bold 14px Arial';
+      ctx.textAlign = 'right';
+      ctx.fillText('🐌 减速中', CANVAS_W - 12, 52);
+    }
+
+    // Combo indicator
+    if (this.player.combo >= 2) {
+      ctx.fillStyle = '#FFD700';
+      ctx.font = 'bold 20px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('🔥 x' + this.player.combo + ' COMBO!', CANVAS_W/2, 70);
+    }
+  }
+
+  drawMenu() {
+    // Overlay
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+    // Title
+    ctx.fillStyle = '#FFF';
+    ctx.font = 'bold 42px Arial';
+    ctx.textAlign = 'center';
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 4;
+    ctx.strokeText('🏎️ 学习赛车', CANVAS_W/2, 200);
+    ctx.fillText('🏎️ 学习赛车', CANVAS_W/2, 200);
+
+    ctx.fillStyle = '#FFD700';
+    ctx.font = 'bold 16px Arial';
+    ctx.fillText('Study Race', CANVAS_W/2, 235);
+
+    // Instructions
+    ctx.fillStyle = '#FFF';
+    ctx.font = '18px Arial';
+    const instructions = [
+      ['⬅ ➡', '切换车道'],
+      ['空格', '氮气加速'],
+      ['💣', '躲避炸弹和障碍物'],
+      ['💰', '收集金币'],
+      ['❓', '答题获得燃油和氮气'],
+    ];
+
+    instructions.forEach(([key, desc], i) => {
+      const y = 320 + i * 42;
+      ctx.fillStyle = '#FFD700';
+      ctx.font = 'bold 18px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText(key, CANVAS_W/2 - 100, y);
+      ctx.fillStyle = '#FFF';
+      ctx.font = '16px Arial';
+      ctx.textAlign = 'left';
+      ctx.fillText(desc, CANVAS_W/2 - 50, y);
+    });
+
+    // Best score
+    if (this.bestScore > 0) {
+      ctx.fillStyle = '#FFD700';
+      ctx.font = 'bold 16px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('🏆 最高分: ' + this.bestScore, CANVAS_W/2, 555);
+    }
+
+    // Start prompt
+    const pulse = Math.sin(Date.now() / 500) * 0.3 + 0.7;
+    ctx.fillStyle = `rgba(255,255,255,${pulse})`;
+    ctx.font = 'bold 24px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('按 空格键 或 点击屏幕 开始', CANVAS_W/2, 640);
+
+    // Draw a demo car
+    ctx.save();
+    ctx.translate(CANVAS_W/2, 700);
+    ctx.scale(0.8, 0.8);
+    this.player.draw(ctx);
+    ctx.restore();
+  }
+
+  drawCountdown() {
+    const count = Math.ceil(this.startCountdown);
+    const alpha = this.startCountdown - Math.floor(this.startCountdown);
+    const scale = 1 + (1 - alpha) * 0.5;
+
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, alpha * 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+    ctx.fillStyle = '#FFF';
+    ctx.font = `bold ${120 * scale}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 6;
+    ctx.strokeText(String(count), CANVAS_W/2, CANVAS_H/2);
+    ctx.fillText(String(count), CANVAS_W/2, CANVAS_H/2);
+
+    if (count === 1) {
+      ctx.fillStyle = '#FFD700';
+      ctx.font = 'bold 28px Arial';
+      ctx.fillText('准备出发!', CANVAS_W/2, CANVAS_H/2 + 80);
+    }
+    ctx.restore();
+  }
+
+  drawGameOver() {
+    const lvlIdx = getLevelIndex(this.score);
+    const lvl = LEVELS[lvlIdx];
+
+    // Overlay
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+    // Game over text
+    ctx.fillStyle = '#f44336';
+    ctx.font = 'bold 40px Arial';
+    ctx.textAlign = 'center';
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 4;
+    ctx.strokeText('游戏结束', CANVAS_W/2, 170);
+    ctx.fillText('游戏结束', CANVAS_W/2, 170);
+
+    // Level badge
+    ctx.fillStyle = lvl.color;
+    ctx.font = 'bold 22px Arial';
+    ctx.fillText(lvl.icon + ' 达到等级：' + lvl.name, CANVAS_W/2, 215);
+
+    // Stats
+    ctx.font = '19px Arial';
+    const lines = [
+      ['最终得分', this.score],
+      ['答对题目', this.totalCorrect + ' 题'],
+      ['最大连击', this.maxCombo + ' 连击'],
+      ['最高记录', this.bestScore],
+    ];
+
+    lines.forEach(([label, value], i) => {
+      const y = 270 + i * 44;
+      ctx.fillStyle = '#AAA';
+      ctx.textAlign = 'right';
+      ctx.fillText(label + '：', CANVAS_W/2 - 10, y);
+      ctx.fillStyle = '#FFD700';
+      ctx.font = 'bold 20px Arial';
+      ctx.textAlign = 'left';
+      ctx.fillText(String(value), CANVAS_W/2 + 10, y);
+      ctx.font = '19px Arial';
+    });
+
+    // Restart prompt
+    const pulse = Math.sin(Date.now() / 500) * 0.3 + 0.7;
+    ctx.fillStyle = `rgba(255,255,255,${pulse})`;
+    ctx.font = 'bold 20px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('按 空格键 重新开始', CANVAS_W/2, 480);
+
+    // Share hint
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '14px Arial';
+    ctx.fillText('点击下方按钮保存分享图', CANVAS_W/2, 510);
+  }
+
+  generateShareImage() {
+    const lvlIdx = getLevelIndex(this.score);
+    const lvl = LEVELS[lvlIdx];
+
+    // Create offscreen canvas for share card (600x800)
+    const cardW = 600, cardH = 800;
+    const offCanvas = document.createElement('canvas');
+    offCanvas.width = cardW;
+    offCanvas.height = cardH;
+    const c = offCanvas.getContext('2d');
+
+    // Background gradient
+    const bgGrad = c.createLinearGradient(0, 0, 0, cardH);
+    bgGrad.addColorStop(0, '#1a1a2e');
+    bgGrad.addColorStop(0.5, '#16213e');
+    bgGrad.addColorStop(1, '#0f3460');
+    c.fillStyle = bgGrad;
+    c.fillRect(0, 0, cardW, cardH);
+
+    // Decorative circles
+    c.fillStyle = 'rgba(255,255,255,0.03)';
+    for (let i = 0; i < 12; i++) {
+      c.beginPath();
+      c.arc(Math.random() * cardW, Math.random() * cardH, 30 + Math.random() * 80, 0, Math.PI*2);
+      c.fill();
+    }
+
+    // Title
+    c.fillStyle = '#FFD700';
+    c.font = 'bold 50px Arial';
+    c.textAlign = 'center';
+    c.fillText('🏎️ 学习赛车', cardW/2, 100);
+
+    c.fillStyle = '#FFF';
+    c.font = 'bold 22px Arial';
+    c.fillText('Study Race', cardW/2, 140);
+
+    // Level badge (large)
+    const badgeY = 200;
+    c.fillStyle = lvl.color;
+    c.font = 'bold 36px Arial';
+    c.fillText(lvl.icon + ' ' + lvl.name, cardW/2, badgeY);
+
+    // Score (huge)
+    c.fillStyle = '#FFD700';
+    c.font = 'bold 72px Arial';
+    c.fillText(String(this.score), cardW/2, 290);
+    c.fillStyle = '#AAA';
+    c.font = '20px Arial';
+    c.fillText('最终得分', cardW/2, 320);
+
+    // Divider
+    c.strokeStyle = 'rgba(255,255,255,0.2)';
+    c.lineWidth = 2;
+    c.beginPath();
+    c.moveTo(80, 360);
+    c.lineTo(cardW - 80, 360);
+    c.stroke();
+
+    // Stats
+    const statX = 120;
+    let statY = 410;
+    const stats = [
+      ['🏆', '最高记录', String(this.bestScore)],
+      ['✅', '答对题目', this.totalCorrect + ' 题'],
+      ['🔥', '最大连击', this.maxCombo + ' 连击'],
+      ['🎯', '当前等级', lvl.icon + ' ' + lvl.name],
+    ];
+
+    stats.forEach(([icon, label, value]) => {
+      c.fillStyle = '#FFF';
+      c.font = 'bold 28px Arial';
+      c.textAlign = 'left';
+      c.fillText(icon + '  ' + label, statX, statY);
+
+      c.fillStyle = '#FFD700';
+      c.font = 'bold 28px Arial';
+      c.textAlign = 'right';
+      c.fillText(value, cardW - statX, statY);
+
+      statY += 58;
+    });
+
+    // Quote
+    statY += 20;
+    c.fillStyle = 'rgba(255,255,255,0.5)';
+    c.font = 'italic 18px Arial';
+    c.textAlign = 'center';
+    c.fillText('"学习如逆水行舟，不进则退"', cardW/2, statY);
+
+    // Footer
+    c.fillStyle = 'rgba(255,255,255,0.3)';
+    c.font = '14px Arial';
+    c.fillText('🏎️ 学习赛车 Study Race', cardW/2, cardH - 30);
+
+    // Convert to image and download
+    offCanvas.toBlob(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `studyrace_${this.score}_${lvl.name}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      // Also try to copy to clipboard on supported browsers
+      if (navigator.clipboard && navigator.clipboard.write) {
+        try {
+          const item = new ClipboardItem({ 'image/png': blob });
+          navigator.clipboard.write([item]).then(() => {
+            // flash feedback on button
+            const btn = document.getElementById('share-btn');
+            btn.textContent = '✅ 已复制到剪贴板!';
+            setTimeout(() => { btn.textContent = '📸 保存分享图'; }, 2000);
+          }).catch(() => {});
+        } catch(e) {}
+      }
+    }, 'image/png');
+  }
+}
+
+// ============ MAIN LOOP ============
+const game = new Game();
+let lastTime = performance.now();
+
+function gameLoop(timestamp) {
+  let dt = (timestamp - lastTime) / 1000;
+  if (dt <= 0) dt = 0.016;
+  lastTime = timestamp;
+
+  game.update(dt);
+  game.render();
+
+  requestAnimationFrame(gameLoop);
+}
+
+// ============ EVENT HANDLERS ============
+function handleStart(e) {
+  if (game.state === STATE.MENU) {
+    initAudio();
+    game.start();
+  } else if (game.state === STATE.GAMEOVER) {
+    game.start();
+  }
+  e.preventDefault();
+}
+
+canvas.addEventListener('click', handleStart);
+window.addEventListener('keydown', e => {
+  if (e.key === ' ' || e.key === 'Enter') {
+    if (game.state === STATE.MENU || game.state === STATE.GAMEOVER) {
+      handleStart(e);
+    }
+  }
+});
+
+// Share button
+document.getElementById('share-btn').addEventListener('click', e => {
+  e.preventDefault();
+  e.stopPropagation();
+  if (game.state === STATE.GAMEOVER) {
+    game.generateShareImage();
+  }
+});
+document.getElementById('share-btn').addEventListener('touchstart', e => {
+  e.preventDefault();
+  e.stopPropagation();
+  if (game.state === STATE.GAMEOVER) {
+    game.generateShareImage();
+  }
+});
+
+// ============ START ============
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
