@@ -182,7 +182,7 @@ const PLAYER_W = 46;
 const PLAYER_H = 80;
 const PLAYER_Y = 620;
 const FUEL_MAX = 100;
-const FUEL_BURN_RATE = 1.8; // per second
+const FUEL_BURN_RATE = 5.0; // per second
 const FUEL_CORRECT = 30;
 const FUEL_WRONG = 10;
 const FUEL_COIN = 5;
@@ -385,11 +385,11 @@ class FloatingText {
 // ============ LEVEL SYSTEM ============
 const LEVELS = [
   { name: '幼儿园', icon: '🎒', threshold: 0, color: '#4CAF50' },
-  { name: '小学',   icon: '📚', threshold: 2000, color: '#2196F3' },
-  { name: '初中',   icon: '📖', threshold: 4000, color: '#FF9800' },
-  { name: '高中',   icon: '🎓', threshold: 6000, color: '#9C27B0' },
-  { name: '大学',   icon: '🏛️', threshold: 8000, color: '#E91E63' },
-  { name: '博士',   icon: '🔬', threshold: 10000, color: '#F44336' },
+  { name: '小学',   icon: '📚', threshold: 1500, color: '#2196F3' },
+  { name: '初中',   icon: '📖', threshold: 3000, color: '#FF9800' },
+  { name: '高中',   icon: '🎓', threshold: 4500, color: '#9C27B0' },
+  { name: '大学',   icon: '🏛️', threshold: 6000, color: '#E91E63' },
+  { name: '博士',   icon: '🔬', threshold: 7500, color: '#F44336' },
 ];
 
 function getLevelIndex(score) {
@@ -1360,7 +1360,7 @@ class Game {
     this.roadOffset += BASE_SPEED * 0.6 * dt;
     this.bgOffset1 += 15 * dt;
     this.bgOffset2 += 25 * dt;
-    this.bgOffset3 += 40 * dt;
+    this.bgOffset3 += BASE_SPEED * 0.6 * dt;
 
     // Auto-spawn some decorative obstacles
   }
@@ -1372,7 +1372,7 @@ class Game {
       this.roadOffset += BASE_SPEED * 0.5 * dt;
       this.bgOffset1 += 15 * dt;
       this.bgOffset2 += 25 * dt;
-      this.bgOffset3 += 40 * dt;
+      this.bgOffset3 += BASE_SPEED * 0.5 * dt;
       return;
     }
 
@@ -1421,11 +1421,11 @@ class Game {
     // Parallax backgrounds
     this.bgOffset1 += speed * 0.15 * dt;
     this.bgOffset2 += speed * 0.3 * dt;
-    this.bgOffset3 += speed * 0.5 * dt;
+    this.bgOffset3 += speed * dt; // same speed as road — trees/grass are at road level
 
     // Spawn obstacles
     this.obstacleTimer += dt;
-    const obstacleInterval = Math.max(0.4, 2.6 - levelIdx * 0.45);
+    const obstacleInterval = Math.max(0.25, 1.6 - levelIdx * 0.3);
     if (this.obstacleTimer >= obstacleInterval) {
       this.obstacleTimer = 0;
       this.spawnObstacle();
@@ -1433,7 +1433,7 @@ class Game {
 
     // Spawn questions
     this.questionTimer += dt;
-    const questionInterval = Math.max(4, 11 - levelIdx * 1.2);
+    const questionInterval = Math.max(3, 8 - levelIdx * 1.0);
     if (this.questionTimer >= questionInterval) {
       this.questionTimer = 0;
       this.spawnQuestion();
@@ -1502,8 +1502,8 @@ class Game {
     // Pick type
     const r = Math.random();
     let type;
-    if (r < 0.4) type = OBSTACLE_TYPES.BOMB;
-    else if (r < 0.75) type = OBSTACLE_TYPES.BROKEN_CAR;
+    if (r < 0.6) type = OBSTACLE_TYPES.BOMB;
+    else if (r < 0.7) type = OBSTACLE_TYPES.BROKEN_CAR;
     else type = OBSTACLE_TYPES.COIN;
 
     // Coins can spawn on occupied lanes (they're good)
@@ -1782,12 +1782,12 @@ class Game {
     }
 
     // Trees on grass
-    this.drawTree(20, (100 + this.bgOffset3 * 0.5) % (CANVAS_H + 80) - 40);
-    this.drawTree(55, (300 + this.bgOffset3 * 0.5) % (CANVAS_H + 80) - 40);
-    this.drawTree(30, (550 + this.bgOffset3 * 0.5) % (CANVAS_H + 80) - 40);
-    this.drawTree(CANVAS_W - 25, (200 + this.bgOffset3 * 0.5) % (CANVAS_H + 80) - 40);
-    this.drawTree(CANVAS_W - 55, (480 + this.bgOffset3 * 0.5) % (CANVAS_H + 80) - 40);
-    this.drawTree(CANVAS_W - 30, (700 + this.bgOffset3 * 0.5) % (CANVAS_H + 80) - 40);
+    this.drawTree(20, (100 + this.bgOffset3) % (CANVAS_H + 80) - 40);
+    this.drawTree(55, (300 + this.bgOffset3) % (CANVAS_H + 80) - 40);
+    this.drawTree(30, (550 + this.bgOffset3) % (CANVAS_H + 80) - 40);
+    this.drawTree(CANVAS_W - 25, (200 + this.bgOffset3) % (CANVAS_H + 80) - 40);
+    this.drawTree(CANVAS_W - 55, (480 + this.bgOffset3) % (CANVAS_H + 80) - 40);
+    this.drawTree(CANVAS_W - 30, (700 + this.bgOffset3) % (CANVAS_H + 80) - 40);
   }
 
   drawCloud(x, y) {
