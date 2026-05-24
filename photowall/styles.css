@@ -322,6 +322,24 @@ input[type="range"]::-webkit-slider-thumb {
 
 .button-row {
   margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+/* ---- glyph white background ---- */
+
+.glyph-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+  pointer-events: none;
+}
+
+.glyph-bg.is-hidden {
+  display: none;
 }
 
 /* ================== buttons ================== */

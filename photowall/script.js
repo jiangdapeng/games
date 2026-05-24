@@ -6,6 +6,7 @@ const holdTimeRange = document.getElementById("holdTimeRange");
 const holdTimeValue = document.getElementById("holdTimeValue");
 const startButton = document.getElementById("startButton");
 const resetButton = document.getElementById("resetButton");
+const exportButton = document.getElementById("exportButton");
 const statusText = document.getElementById("statusText");
 const photoCount = document.getElementById("photoCount");
 const stage = document.getElementById("stage");
@@ -48,6 +49,7 @@ const state = {
   isDrawing: false,
   lastDrawX: 0,
   lastDrawY: 0,
+  currentPoints: [],
 };
 
 function createEmptyState() {
@@ -255,6 +257,11 @@ function layoutGrid() {
   if (state.mode === "canvas") {
     drawCanvas.classList.remove("is-hidden");
   }
+
+  // hide mosaic white background
+  const bg = document.getElementById("glyph-bg");
+  if (bg) bg.classList.add("is-hidden");
+  state.currentPoints = [];
 
   if (!state.photos.length) {
     clearTiles();
@@ -814,7 +821,43 @@ function showGlyph(points, token) {
     return;
   }
 
+  state.currentPoints = points;
+
   ensureTileCount(points.length);
+
+  // create or update white background behind the mosaic
+  let bg = document.getElementById("glyph-bg");
+  if (!bg) {
+    bg = document.createElement("div");
+    bg.id = "glyph-bg";
+    bg.className = "glyph-bg";
+    stage.insertBefore(bg, stage.firstChild);
+  }
+
+  if (points.length) {
+    const bounds = points.reduce(
+      (acc, p) => ({
+        minX: Math.min(acc.minX, p.x),
+        maxX: Math.max(acc.maxX, p.x),
+        minY: Math.min(acc.minY, p.y),
+        maxY: Math.max(acc.maxY, p.y),
+      }),
+      {
+        minX: Number.POSITIVE_INFINITY,
+        maxX: Number.NEGATIVE_INFINITY,
+        minY: Number.POSITIVE_INFINITY,
+        maxY: Number.NEGATIVE_INFINITY,
+      }
+    );
+    const pad = state.tileSize * 2;
+    bg.style.left = (bounds.minX - pad) + "px";
+    bg.style.top = (bounds.minY - pad) + "px";
+    bg.style.width = (bounds.maxX - bounds.minX + state.tileSize + pad * 2) + "px";
+    bg.style.height = (bounds.maxY - bounds.minY + state.tileSize + pad * 2) + "px";
+    bg.classList.remove("is-hidden");
+  } else {
+    bg.classList.add("is-hidden");
+  }
 
   state.tiles.forEach((tile, index) => {
     const point = points[index];
@@ -986,6 +1029,100 @@ async function playCanvas() {
   }
 }
 
+// ---- export ----
+
+async function exportMosaic() {
+  if (!state.currentPoints.length) {
+    setStatus("没有可导出的拼接结果，请先执行一次拼接。");
+    return;
+  }
+
+  const points = state.currentPoints;
+  const tileSize = state.tileSize;
+  const exportScale = Math.max(2, Math.round(100 / tileSize));
+  const pad = tileSize * 2;
+
+  // compute bounds
+  const bounds = points.reduce(
+    (acc, p) => ({
+      minX: Math.min(acc.minX, p.x),
+      maxX: Math.max(acc.maxX, p.x),
+      minY: Math.min(acc.minY, p.y),
+      maxY: Math.max(acc.maxY, p.y),
+    }),
+    {
+      minX: Number.POSITIVE_INFINITY,
+      maxX: Number.NEGATIVE_INFINITY,
+      minY: Number.POSITIVE_INFINITY,
+      maxY: Number.NEGATIVE_INFINITY,
+    }
+  );
+
+  const canvasWidth = (bounds.maxX - bounds.minX + tileSize + pad * 2) * exportScale;
+  const canvasHeight = (bounds.maxY - bounds.minY + tileSize + pad * 2) * exportScale;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = canvasWidth;
+  canvas.height = canvasHeight;
+  const ctx = canvas.getContext("2d");
+
+  // white background
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+  setStatus("正在导出，加载照片中...");
+
+  // load all unique photos as Image objects
+  const loadedImages = [];
+  for (let i = 0; i < state.photos.length; i++) {
+    const img = new Image();
+    img.src = state.photos[i].url;
+    try {
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = () => reject(new Error(`照片 ${i + 1} 加载失败`));
+      });
+    } catch (e) {
+      // skip failed images, draw nothing for them
+    }
+    loadedImages.push(img);
+  }
+
+  if (!loadedImages.length) {
+    setStatus("导出失败：没有可用的照片。");
+    return;
+  }
+
+  // draw each tile
+  const offsetX = bounds.minX - pad;
+  const offsetY = bounds.minY - pad;
+
+  for (let i = 0; i < points.length; i++) {
+    const point = points[i];
+    const img = loadedImages[i % loadedImages.length];
+    if (!img || !img.naturalWidth) continue;
+    const x = (point.x - offsetX) * exportScale;
+    const y = (point.y - offsetY) * exportScale;
+    const size = point.size * exportScale;
+    ctx.drawImage(img, x, y, size, size);
+  }
+
+  // trigger download
+  canvas.toBlob((blob) => {
+    if (!blob) {
+      setStatus("导出失败：无法生成图片。");
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.download = "photowall-" + Date.now() + ".png";
+    link.href = url;
+    link.click();
+    URL.revokeObjectURL(url);
+    setStatus(`导出完成，图片 ${canvas.width}×${canvas.height} px，可直接打印。`);
+  }, "image/png");
+}
+
 // ---- mode switching ----
 
 function switchMode(mode) {
@@ -1151,6 +1288,10 @@ startButton.addEventListener("click", () => {
 resetButton.addEventListener("click", () => {
   cancelAnimation();
   layoutGrid();
+});
+
+exportButton.addEventListener("click", () => {
+  exportMosaic();
 });
 
 modeTabs.addEventListener("click", (event) => {
