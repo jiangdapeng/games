@@ -563,41 +563,104 @@ button:hover {
   display: none;
 }
 
-/* ---- canvas toolbar ---- */
+/* ---- draw toolbar ---- */
 
-.canvas-toolbar {
+.draw-toolbar {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
   display: flex;
-  gap: 8px;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: rgba(13, 13, 26, 0.88);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
 
-.tool-button {
-  flex: 1;
-  padding: 10px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text);
-  font-size: 13px;
+.draw-toolbar.is-hidden {
+  display: none;
+}
+
+.tool-group {
+  display: flex;
+  gap: 2px;
+}
+
+.shape-btn {
+  padding: 7px 11px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+  white-space: nowrap;
+  transition: background 150ms ease, color 150ms ease;
 }
 
-.tool-button:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
+.shape-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
 }
 
-.tool-button.is-active {
-  background: rgba(255, 94, 160, 0.18);
-  border-color: rgba(255, 94, 160, 0.4);
+.shape-btn.is-active {
+  background: rgba(123, 95, 255, 0.22);
+  color: #fff;
+}
+
+.shape-btn[data-tool="eraser"].is-active {
+  background: rgba(255, 94, 160, 0.22);
   color: var(--accent-pink);
-  box-shadow: 0 0 14px rgba(255, 94, 160, 0.2);
 }
 
-.tool-button.secondary {
-  border-color: rgba(255, 255, 255, 0.06);
-  color: var(--muted);
+.tool-divider {
+  width: 1px;
+  height: 22px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+#fillColorInput {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  cursor: pointer;
+  background: transparent;
+  flex-shrink: 0;
+}
+
+#fillColorInput::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+#fillColorInput::-webkit-color-swatch {
+  border: 0;
+  border-radius: 3px;
+}
+
+/* ---- preview canvas ---- */
+
+.preview-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  border-radius: 18px;
+}
+
+.preview-canvas.is-hidden {
+  display: none;
 }
 
 /* ================== responsive ================== */

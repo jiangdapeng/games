@@ -96,11 +96,7 @@
         </div>
 
         <div class="panel-block mode-canvas is-hidden">
-          <div class="canvas-toolbar">
-            <button id="eraserToggle" class="tool-button" type="button">橡皮擦</button>
-            <button id="clearCanvasBtn" class="tool-button secondary" type="button">清空画布</button>
-          </div>
-          <p class="field-hint">在右侧画布上自由绘制形状，点击「开始拼接」用照片拼出画稿。</p>
+          <p class="field-hint">画笔粗细影响手绘笔迹和形状描边宽度。形状和颜色工具在画布上方。</p>
         </div>
 
         <div class="panel-block slider-block mode-text">
@@ -133,10 +129,26 @@
         </div>
 
         <section class="stage-frame">
+          <div class="draw-toolbar mode-canvas is-hidden" id="drawToolbar">
+            <div class="tool-group">
+              <button class="shape-btn is-active" data-tool="freehand" title="画笔">画笔</button>
+              <button class="shape-btn" data-tool="line" title="直线">直线</button>
+              <button class="shape-btn" data-tool="rect" title="矩形">矩形</button>
+              <button class="shape-btn" data-tool="circle" title="圆形">圆形</button>
+              <button class="shape-btn" data-tool="ellipse" title="椭圆">椭圆</button>
+              <button class="shape-btn" data-tool="triangle" title="三角">三角</button>
+            </div>
+            <div class="tool-divider"></div>
+            <input type="color" id="fillColorInput" value="#111111" title="填充颜色">
+            <div class="tool-divider"></div>
+            <button id="eraserToggle" class="shape-btn" data-tool="eraser" title="橡皮擦">橡皮</button>
+            <button id="clearCanvasBtn" class="shape-btn" data-tool="clear" title="清空画布">清空</button>
+          </div>
           <div class="scanlines" aria-hidden="true"></div>
           <div class="stage-grid" aria-hidden="true"></div>
           <div id="stage" class="stage"></div>
           <canvas id="drawCanvas" class="draw-canvas is-hidden" width="800" height="600"></canvas>
+          <canvas id="previewCanvas" class="preview-canvas is-hidden" width="800" height="600"></canvas>
           <canvas id="glyphCanvas" class="hidden-canvas" width="1200" height="700"></canvas>
         </section>
       </main>

@@ -22,6 +22,10 @@ const edgeSensitivityRange = document.getElementById("edgeSensitivityRange");
 const edgeSensitivityValue = document.getElementById("edgeSensitivityValue");
 const drawCanvas = document.getElementById("drawCanvas");
 const drawCtx = drawCanvas.getContext("2d");
+const previewCanvas = document.getElementById("previewCanvas");
+const previewCtx = previewCanvas.getContext("2d");
+const drawToolbar = document.getElementById("drawToolbar");
+const fillColorInput = document.getElementById("fillColorInput");
 const brushSizeRange = document.getElementById("brushSizeRange");
 const brushSizeValue = document.getElementById("brushSizeValue");
 const eraserToggle = document.getElementById("eraserToggle");
@@ -45,10 +49,14 @@ const state = {
   cachedSubjectMask: null,
   cachedMaskKey: "",
   brushSize: Number(brushSizeRange.value),
+  drawTool: "freehand",
+  fillColor: "#111111",
   isErasing: false,
   isDrawing: false,
   lastDrawX: 0,
   lastDrawY: 0,
+  shapeStartX: 0,
+  shapeStartY: 0,
   currentPoints: [],
 };
 
@@ -143,6 +151,8 @@ function initDrawingCanvas() {
       drawCtx.putImageData(oldData, 0, 0);
     }
   }
+
+  initPreviewCanvas();
 }
 
 function clearDrawingCanvas() {
@@ -152,6 +162,7 @@ function clearDrawingCanvas() {
   const h = Math.round(rect.height * dpr);
   drawCtx.fillStyle = "#fff";
   drawCtx.fillRect(0, 0, w, h);
+  clearPreview();
 }
 
 function getDrawPoint(e) {
@@ -170,17 +181,24 @@ function startStroke(e) {
   state.lastDrawX = pt.x;
   state.lastDrawY = pt.y;
 
-  drawCtx.lineWidth = state.brushSize * (window.devicePixelRatio || 1);
-  drawCtx.lineCap = "round";
-  drawCtx.lineJoin = "round";
-  drawCtx.strokeStyle = state.isErasing ? "#fff" : "#111";
-  drawCtx.globalCompositeOperation = "source-over";
-
-  // draw a dot at the start point
-  drawCtx.beginPath();
-  drawCtx.arc(pt.x, pt.y, drawCtx.lineWidth / 2, 0, Math.PI * 2);
-  drawCtx.fillStyle = drawCtx.strokeStyle;
-  drawCtx.fill();
+  if (state.drawTool === "freehand") {
+    const dpr = window.devicePixelRatio || 1;
+    drawCtx.lineWidth = state.brushSize * dpr;
+    drawCtx.lineCap = "round";
+    drawCtx.lineJoin = "round";
+    drawCtx.strokeStyle = state.isErasing ? "#fff" : state.fillColor;
+    drawCtx.globalCompositeOperation = "source-over";
+    drawCtx.beginPath();
+    drawCtx.arc(pt.x, pt.y, drawCtx.lineWidth / 2, 0, Math.PI * 2);
+    drawCtx.fillStyle = drawCtx.strokeStyle;
+    drawCtx.fill();
+  } else {
+    // shape drawing: record anchor and init end point
+    state.shapeStartX = pt.x;
+    state.shapeStartY = pt.y;
+    state.lastDrawX = pt.x;
+    state.lastDrawY = pt.y;
+  }
 }
 
 function continueStroke(e) {
@@ -188,16 +206,26 @@ function continueStroke(e) {
   e.preventDefault();
   const pt = getDrawPoint(e);
 
-  drawCtx.lineWidth = state.brushSize * (window.devicePixelRatio || 1);
-  drawCtx.lineCap = "round";
-  drawCtx.lineJoin = "round";
-  drawCtx.strokeStyle = state.isErasing ? "#fff" : "#111";
-  drawCtx.globalCompositeOperation = "source-over";
-
-  drawCtx.beginPath();
-  drawCtx.moveTo(state.lastDrawX, state.lastDrawY);
-  drawCtx.lineTo(pt.x, pt.y);
-  drawCtx.stroke();
+  if (state.drawTool === "freehand") {
+    const dpr = window.devicePixelRatio || 1;
+    drawCtx.lineWidth = state.brushSize * dpr;
+    drawCtx.lineCap = "round";
+    drawCtx.lineJoin = "round";
+    drawCtx.strokeStyle = state.isErasing ? "#fff" : state.fillColor;
+    drawCtx.globalCompositeOperation = "source-over";
+    drawCtx.beginPath();
+    drawCtx.moveTo(state.lastDrawX, state.lastDrawY);
+    drawCtx.lineTo(pt.x, pt.y);
+    drawCtx.stroke();
+  } else {
+    // shape preview on overlay canvas
+    clearPreview();
+    const dpr = window.devicePixelRatio || 1;
+    const lw = state.drawTool === "line" ? state.brushSize * dpr : 0;
+    drawShapeOnContext(previewCtx, state.drawTool,
+      state.shapeStartX, state.shapeStartY, pt.x, pt.y,
+      state.fillColor, lw);
+  }
 
   state.lastDrawX = pt.x;
   state.lastDrawY = pt.y;
@@ -206,8 +234,108 @@ function continueStroke(e) {
 function endStroke(e) {
   if (!state.isDrawing) return;
   state.isDrawing = false;
+
+  if (state.drawTool !== "freehand") {
+    // commit shape to main canvas
+    clearPreview();
+    const dpr = window.devicePixelRatio || 1;
+    const lw = state.drawTool === "line" ? state.brushSize * dpr : 0;
+    drawShapeOnContext(drawCtx, state.drawTool,
+      state.shapeStartX, state.shapeStartY, state.lastDrawX, state.lastDrawY,
+      state.fillColor, lw);
+  }
+
   state.lastDrawX = 0;
   state.lastDrawY = 0;
+  state.shapeStartX = 0;
+  state.shapeStartY = 0;
+}
+
+// ---- shape rendering ----
+
+function drawShapeOnContext(ctx, tool, x1, y1, x2, y2, color, lineWidth) {
+  const x = Math.min(x1, x2);
+  const y = Math.min(y1, y2);
+  const w = Math.abs(x2 - x1);
+  const h = Math.abs(y2 - y1);
+
+  ctx.fillStyle = color;
+  ctx.strokeStyle = color;
+
+  switch (tool) {
+    case "line":
+      ctx.lineWidth = lineWidth || 1;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      break;
+    case "rect":
+      if (w < 2 || h < 2) return;
+      ctx.fillRect(x, y, w, h);
+      break;
+    case "circle": {
+      if (w < 2 || h < 2) return;
+      const cx = x + w / 2;
+      const cy = y + h / 2;
+      const r = Math.min(w, h) / 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, Math.max(r, 1), 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
+    case "ellipse":
+      if (w < 2 || h < 2) return;
+      ctx.beginPath();
+      ctx.ellipse(x + w / 2, y + h / 2, Math.max(w / 2, 1), Math.max(h / 2, 1), 0, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    case "triangle":
+      if (w < 2 || h < 2) return;
+      ctx.beginPath();
+      ctx.moveTo(x + w / 2, y);
+      ctx.lineTo(x, y + h);
+      ctx.lineTo(x + w, y + h);
+      ctx.closePath();
+      ctx.fill();
+      break;
+  }
+}
+
+// ---- preview canvas ----
+
+function clearPreview() {
+  previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+}
+
+function initPreviewCanvas() {
+  const rect = readStageRect();
+  const dpr = window.devicePixelRatio || 1;
+  const w = Math.round(rect.width * dpr);
+  const h = Math.round(rect.height * dpr);
+
+  if (previewCanvas.width !== w || previewCanvas.height !== h) {
+    previewCanvas.width = w;
+    previewCanvas.height = h;
+  }
+}
+
+// ---- tool switching ----
+
+function setDrawTool(tool) {
+  state.drawTool = tool;
+
+  // update shape button active states
+  document.querySelectorAll("#drawToolbar .shape-btn").forEach((btn) => {
+    btn.classList.toggle("is-active", btn.dataset.tool === tool);
+  });
+
+  // eraser toggle only relevant in freehand mode
+  if (tool !== "freehand") {
+    state.isErasing = false;
+    eraserToggle.classList.remove("is-active");
+  }
 }
 
 function readStageRect() {
@@ -256,6 +384,8 @@ function applyTileVisual(tile, spec, imageUrl) {
 function layoutGrid() {
   if (state.mode === "canvas") {
     drawCanvas.classList.remove("is-hidden");
+    previewCanvas.classList.remove("is-hidden");
+    drawToolbar.classList.remove("is-hidden");
   }
 
   // hide mosaic white background
@@ -1012,8 +1142,10 @@ async function playCanvas() {
       return;
     }
 
-    // hide drawing canvas so the mosaic tiles are visible
+    // hide drawing canvas and toolbar so the mosaic tiles are visible
     drawCanvas.classList.add("is-hidden");
+    previewCanvas.classList.add("is-hidden");
+    drawToolbar.classList.add("is-hidden");
 
     showGlyph(points, token);
 
@@ -1140,8 +1272,10 @@ function switchMode(mode) {
   imageControls.forEach((el) => el.classList.toggle("is-hidden", mode !== "image"));
   canvasControls.forEach((el) => el.classList.toggle("is-hidden", mode !== "canvas"));
 
-  // show/hide drawing canvas overlay
+  // show/hide drawing canvas and toolbar
   drawCanvas.classList.toggle("is-hidden", mode !== "canvas");
+  previewCanvas.classList.toggle("is-hidden", mode !== "canvas");
+  drawToolbar.classList.toggle("is-hidden", mode !== "canvas");
 
   // sync segmentation sub-mode visibility
   if (mode === "image") {
@@ -1257,14 +1391,34 @@ brushSizeRange.addEventListener("input", () => {
   updateBrushSizeLabel();
 });
 
-eraserToggle.addEventListener("click", () => {
-  state.isErasing = !state.isErasing;
-  eraserToggle.classList.toggle("is-active", state.isErasing);
-  eraserToggle.textContent = state.isErasing ? "橡皮擦 (开)" : "橡皮擦";
+// ---- toolbar events ----
+
+drawToolbar.addEventListener("click", (event) => {
+  const btn = event.target.closest(".shape-btn");
+  if (!btn) return;
+  const tool = btn.dataset.tool;
+
+  if (tool === "clear") {
+    clearDrawingCanvas();
+    return;
+  }
+
+  if (tool === "eraser") {
+    // toggle eraser: switch to freehand and toggle erase mode
+    setDrawTool("freehand");
+    state.isErasing = !state.isErasing;
+    eraserToggle.classList.toggle("is-active", state.isErasing);
+    return;
+  }
+
+  // shape/brush tool
+  state.isErasing = false;
+  eraserToggle.classList.remove("is-active");
+  setDrawTool(tool);
 });
 
-clearCanvasBtn.addEventListener("click", () => {
-  clearDrawingCanvas();
+fillColorInput.addEventListener("input", () => {
+  state.fillColor = fillColorInput.value;
 });
 
 refImageInput.addEventListener("change", (event) => {
