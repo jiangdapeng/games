@@ -225,12 +225,21 @@ window.addEventListener('keydown', e => {
 window.addEventListener('keyup', e => { keys[e.key] = false; });
 
 canvas.addEventListener('touchstart', e => {
-  e.preventDefault();
+  // Don't prevent default in menu/gameover so click event can fire
+  if (game.state === STATE.PLAYING || game.state === STATE.ANSWERING) {
+    e.preventDefault();
+  }
   const t = e.touches[0];
   touchStartX = t.clientX;
   touchStartY = t.clientY;
 });
 canvas.addEventListener('touchend', e => {
+  // Start/restart game on tap in menu or game over
+  if (game.state === STATE.MENU || game.state === STATE.GAMEOVER) {
+    handleStart(e);
+    return;
+  }
+
   e.preventDefault();
   const t = e.changedTouches[0];
   const dx = t.clientX - touchStartX;
@@ -2117,7 +2126,7 @@ class Game {
     ctx.fillStyle = `rgba(255,255,255,${pulse})`;
     ctx.font = 'bold 20px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText('按 空格键 重新开始', CANVAS_W/2, 480);
+    ctx.fillText('按 空格键 / 点击屏幕 重新开始', CANVAS_W/2, 480);
 
     // Share hint
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
