@@ -34,6 +34,9 @@ canvas {
   width: 100%;
   height: 100%;
   image-rendering: auto;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 /* Question overlay */
@@ -189,7 +192,7 @@ const NITRO_DURATION = 3; // seconds
 const QUESTION_TIMER = 8; // seconds
 
 // Speeds
-const BASE_SPEED = 300; // pixels per second
+const BASE_SPEED = 400; // pixels per second
 const NITRO_SPEED_MULT = 2;
 const SLOW_SPEED = 150;
 const SLOW_DURATION = 2; // seconds
@@ -1031,11 +1034,11 @@ class Player {
   update(dt, gameSpeed) {
     this.animTimer += dt;
 
-    // Lane switching animation
+    // Lane switching animation — constant smooth speed
     const targetX = LANE_CENTERS[this.targetLane];
     const dx = targetX - this.x;
-    const moveSpeed = 600;
-    if (Math.abs(dx) < 2) {
+    const moveSpeed = 480; // px/s, smooth lane change ~0.22s
+    if (Math.abs(dx) < moveSpeed * dt) {
       this.x = targetX;
       this.lane = this.targetLane;
     } else {
@@ -1101,11 +1104,12 @@ class Player {
       this.drawNitroFlame(ctx);
     }
 
-    // Normal exhaust
+    // Normal exhaust — deterministic pulse, no flicker
     if (!this.nitroActive) {
-      ctx.fillStyle = '#888';
-      ctx.fillRect(-5, -this.h/2, 4, 8 + Math.random() * 4);
-      ctx.fillRect(1, -this.h/2, 4, 6 + Math.random() * 4);
+      const pulse = Math.sin(this.animTimer * 18) * 0.5 + 0.5;
+      ctx.fillStyle = '#999';
+      ctx.fillRect(-5, this.h/2 - 5, 4, 4 + pulse * 5);
+      ctx.fillRect(1, this.h/2 - 5, 4, 3 + pulse * 4);
     }
 
     // Shadow
@@ -1207,28 +1211,29 @@ class Player {
   }
 
   drawNitroFlame(ctx) {
-    const particles = 12;
+    const rearY = this.h / 2; // flame sprays from rear (bottom of car)
+    const particles = 14;
     for (let i = 0; i < particles; i++) {
-      const spread = (Math.random() - 0.5) * 20;
-      const length = 15 + Math.random() * 25;
+      const spread = (Math.random() - 0.5) * 22;
+      const length = 18 + Math.random() * 30;
       const alpha = 0.4 + Math.random() * 0.6;
 
       ctx.fillStyle = `rgba(100, 140, 255, ${alpha})`;
       ctx.beginPath();
-      ctx.arc(spread, -this.h/2 - length * (0.3 + Math.random() * 0.7), 2 + Math.random() * 3, 0, Math.PI * 2);
+      ctx.arc(spread, rearY + length * (0.3 + Math.random() * 0.7), 2 + Math.random() * 4, 0, Math.PI * 2);
       ctx.fill();
     }
-    // Core flame
-    const flameGrad = ctx.createLinearGradient(0, -this.h/2, 0, -this.h/2 - 30);
+    // Core flame — sprays downward (rear direction)
+    const flameGrad = ctx.createLinearGradient(0, rearY, 0, rearY + 35);
     flameGrad.addColorStop(0, '#E3F2FD');
     flameGrad.addColorStop(0.3, '#90CAF9');
     flameGrad.addColorStop(0.6, '#5C6BC0');
     flameGrad.addColorStop(1, 'transparent');
     ctx.fillStyle = flameGrad;
     ctx.beginPath();
-    ctx.moveTo(-10, -this.h/2);
-    ctx.quadraticCurveTo(5, -this.h/2 - 20, 0, -this.h/2 - 35);
-    ctx.quadraticCurveTo(-5, -this.h/2 - 20, 10, -this.h/2);
+    ctx.moveTo(-12, rearY);
+    ctx.quadraticCurveTo(6, rearY + 22, 0, rearY + 38);
+    ctx.quadraticCurveTo(-6, rearY + 22, 12, rearY);
     ctx.fill();
   }
 
@@ -1420,7 +1425,7 @@ class Game {
 
     // Spawn obstacles
     this.obstacleTimer += dt;
-    const obstacleInterval = Math.max(0.8, 2.5 - levelIdx * 0.3);
+    const obstacleInterval = Math.max(0.4, 2.6 - levelIdx * 0.45);
     if (this.obstacleTimer >= obstacleInterval) {
       this.obstacleTimer = 0;
       this.spawnObstacle();
@@ -1482,7 +1487,10 @@ class Game {
   }
 
   getSpeed() {
-    return this.player.getCurrentSpeed();
+    // Level-based speed: +8% per level, 1.0x → 1.4x
+    const lvlIdx = getLevelIndex(this.score);
+    const lvlMult = 1 + lvlIdx * 0.08;
+    return this.player.getCurrentSpeed() * lvlMult;
   }
 
   spawnObstacle() {
@@ -1494,8 +1502,8 @@ class Game {
     // Pick type
     const r = Math.random();
     let type;
-    if (r < 0.3) type = OBSTACLE_TYPES.BOMB;
-    else if (r < 0.55) type = OBSTACLE_TYPES.BROKEN_CAR;
+    if (r < 0.4) type = OBSTACLE_TYPES.BOMB;
+    else if (r < 0.75) type = OBSTACLE_TYPES.BROKEN_CAR;
     else type = OBSTACLE_TYPES.COIN;
 
     // Coins can spawn on occupied lanes (they're good)
@@ -1558,11 +1566,13 @@ class Game {
           this.score += 150;
           sfxCoin();
         } else {
+          this.player.removeFuel(20);
           this.player.slowed = true;
           this.player.slowTimer = SLOW_DURATION;
           this.particles.emit(obs.x, obs.y, 10, '#FFC107', [0.3, 0.5], [40, 120]);
-          this.floatingTexts.push(new FloatingText(obs.x, obs.y, '减速!', '#FF9800'));
+          this.floatingTexts.push(new FloatingText(obs.x, obs.y, '-20⛽ 减速!', '#FF9800'));
           playBeep(300, 0.2, 'sawtooth');
+          if (this.player.fuel <= 0) this.gameOver();
         }
         break;
 
@@ -1659,7 +1669,8 @@ class Game {
   }
 
   handleWrongAnswer() {
-    this.player.removeFuel(FUEL_WRONG);
+    // Wrong answer halves current fuel
+    this.player.fuel = Math.max(1, Math.floor(this.player.fuel / 2));
     this.player.combo = 0;
 
     this.floatingTexts2.push(new FloatingText(CANVAS_W/2, PLAYER_Y - 20, '✗ 答错了', '#F44336', 1.0));
@@ -1864,116 +1875,110 @@ class Game {
   }
 
   drawUI() {
-    // Fuel bar background
-    const barX = 10, barY = 15, barW = 180, barH = 18;
-
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.beginPath();
-    ctx.roundRect(barX, barY, barW, barH, 9);
-    ctx.fill();
-
-    // Fuel bar fill
-    const fuelPct = this.player.fuel / FUEL_MAX;
-    let fuelColor;
-    if (fuelPct > 0.5) fuelColor = '#4CAF50';
-    else if (fuelPct > 0.2) fuelColor = '#FF9800';
-    else fuelColor = '#f44336';
-
-    if (fuelPct > 0) {
-      const fuelGrad = ctx.createLinearGradient(barX, 0, barX + barW * fuelPct, 0);
-      fuelGrad.addColorStop(0, fuelColor);
-      fuelGrad.addColorStop(1, fuelColor + 'CC');
-      ctx.fillStyle = fuelGrad;
-      ctx.beginPath();
-      ctx.roundRect(barX, barY, barW * fuelPct, barH, 9);
-      ctx.fill();
-    }
-
-    // Fuel label
-    ctx.fillStyle = '#FFF';
-    ctx.font = 'bold 10px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('⛽ ' + Math.floor(this.player.fuel) + '%', barX + barW/2, barY + 13);
-
-    // Warning flash when low
-    if (fuelPct <= 0.2 && this.state === STATE.PLAYING && Math.floor(this.elapsedTime * 4) % 2 === 0) {
-      ctx.fillStyle = 'rgba(244,67,54,0.3)';
-      ctx.beginPath();
-      ctx.roundRect(barX, barY, barW, barH, 9);
-      ctx.fill();
-    }
-
-    // Nitro indicators
-    for (let i = 0; i < NITRO_MAX; i++) {
-      const nx = barX + barW + 15 + i * 30;
-      const ny = barY + 2;
-      const active = i < this.player.nitroCharges;
-
-      ctx.fillStyle = active ? '#667eea' : 'rgba(255,255,255,0.3)';
-      ctx.beginPath();
-      ctx.roundRect(nx, ny, 26, 14, 7);
-      ctx.fill();
-
-      if (active) {
-        ctx.fillStyle = '#FFF';
-        ctx.font = 'bold 8px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('N₂O', nx + 13, ny + 10);
-      }
-    }
-
-    // Score
-    ctx.fillStyle = '#FFF';
-    ctx.font = 'bold 16px Arial';
-    ctx.textAlign = 'right';
-    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
-    ctx.lineWidth = 3;
-    ctx.strokeText('⭐ ' + this.score, CANVAS_W - 12, 30);
-    ctx.fillText('⭐ ' + this.score, CANVAS_W - 12, 30);
-
-    // Level display
     const lvlIdx = getLevelIndex(this.score);
     const lvl = LEVELS[lvlIdx];
     const nextLvl = LEVELS[Math.min(lvlIdx + 1, LEVELS.length - 1)];
 
-    // Level badge
-    const badgeX = CANVAS_W - 12, badgeY = 52;
-    ctx.fillStyle = lvl.color;
-    ctx.font = 'bold 13px Arial';
-    ctx.textAlign = 'right';
-    ctx.fillText(lvl.icon + ' ' + lvl.name, badgeX, badgeY);
+    // Fuel bar background
+    const barX = 8, barY = 12, barW = 152, barH = 16;
 
-    // Progress to next level
-    if (lvlIdx < LEVELS.length - 1) {
-      const progressBarW = 120, progressBarH = 5;
-      const progressX = badgeX - progressBarW;
-      const progressY = badgeY + 8;
-      const startScore = lvl.threshold;
-      const endScore = nextLvl.threshold;
-      const progress = Math.min(1, (this.score - startScore) / (endScore - startScore));
+    // Dark background strip across entire top bar
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.beginPath();
+    ctx.roundRect(4, 6, CANVAS_W - 8, 36, 10);
+    ctx.fill();
 
-      ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    // Fuel bar fill — blue tones to contrast with green grass
+    const fuelPct = this.player.fuel / FUEL_MAX;
+    let fuelColorHi, fuelColorLo;
+    if (fuelPct > 0.5) { fuelColorHi = '#42A5F5'; fuelColorLo = '#1E88E5'; }
+    else if (fuelPct > 0.2) { fuelColorHi = '#FF9800'; fuelColorLo = '#F57C00'; }
+    else { fuelColorHi = '#EF5350'; fuelColorLo = '#C62828'; }
+
+    if (fuelPct > 0) {
+      const fuelGrad = ctx.createLinearGradient(barX, 0, barX + barW * fuelPct, 0);
+      fuelGrad.addColorStop(0, fuelColorHi);
+      fuelGrad.addColorStop(1, fuelColorLo);
+      ctx.fillStyle = fuelGrad;
       ctx.beginPath();
-      ctx.roundRect(progressX, progressY, progressBarW, progressBarH, 2.5);
+      ctx.roundRect(barX, barY, barW * fuelPct, barH, 8);
+      ctx.fill();
+    }
+
+    // Fuel bar border
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(barX, barY, barW, barH, 8);
+    ctx.stroke();
+
+    // Fuel label
+    ctx.fillStyle = '#FFF';
+    ctx.font = 'bold 9px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('⛽ ' + Math.floor(this.player.fuel) + '%', barX + barW/2, barY + 11);
+
+    // Warning flash when low
+    if (fuelPct <= 0.2 && this.state === STATE.PLAYING && Math.floor(this.elapsedTime * 4) % 2 === 0) {
+      ctx.fillStyle = 'rgba(244,67,54,0.4)';
+      ctx.beginPath();
+      ctx.roundRect(barX, barY, barW, barH, 8);
+      ctx.fill();
+    }
+
+    // Nitro indicators — right next to fuel bar
+    const nitroStartX = barX + barW + 8;
+    for (let i = 0; i < NITRO_MAX; i++) {
+      const nx = nitroStartX + i * 28;
+      const ny = barY + 1;
+      const active = i < this.player.nitroCharges;
+
+      ctx.fillStyle = active ? '#7C4DFF' : 'rgba(255,255,255,0.2)';
+      ctx.beginPath();
+      ctx.roundRect(nx, ny, 24, 14, 7);
+      ctx.fill();
+
+      if (active) {
+        ctx.fillStyle = '#FFF';
+        ctx.font = 'bold 7px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('N₂O', nx + 12, ny + 10);
+      }
+    }
+
+    // Level badge — right next to nitro
+    const lvlX = nitroStartX + NITRO_MAX * 28 + 8;
+    ctx.fillStyle = lvl.color;
+    ctx.font = 'bold 12px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText(lvl.icon + lvl.name, lvlX, barY + 12);
+
+    // Mini progress bar under level badge
+    if (lvlIdx < LEVELS.length - 1) {
+      const progW = 46, progH = 3;
+      const progX = lvlX;
+      const progY = barY + barH - 4;
+      const progress = Math.min(1, (this.score - lvl.threshold) / (nextLvl.threshold - lvl.threshold));
+
+      ctx.fillStyle = 'rgba(255,255,255,0.2)';
+      ctx.beginPath();
+      ctx.roundRect(progX, progY, progW, progH, 1.5);
       ctx.fill();
 
       ctx.fillStyle = lvl.color;
       ctx.beginPath();
-      ctx.roundRect(progressX, progressY, progressBarW * progress, progressBarH, 2.5);
+      ctx.roundRect(progX, progY, progW * progress, progH, 1.5);
       ctx.fill();
-
-      // Next level hint
-      ctx.fillStyle = 'rgba(255,255,255,0.6)';
-      ctx.font = '9px Arial';
-      ctx.textAlign = 'right';
-      ctx.fillText(nextLvl.icon + ' ' + (endScore - this.score) + '分升级', badgeX, progressY + 12);
-    } else {
-      // Max level
-      ctx.fillStyle = '#FFD700';
-      ctx.font = 'bold 11px Arial';
-      ctx.textAlign = 'right';
-      ctx.fillText('🏆 最高等级!', badgeX, badgeY + 20);
     }
+
+    // Score — far right
+    ctx.fillStyle = '#FFF';
+    ctx.font = 'bold 15px Arial';
+    ctx.textAlign = 'right';
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+    ctx.lineWidth = 3;
+    ctx.strokeText('⭐ ' + this.score, CANVAS_W - 8, barY + 12);
+    ctx.fillText('⭐ ' + this.score, CANVAS_W - 8, barY + 12);
 
     // Speed indicator
     if (this.player.nitroActive) {
