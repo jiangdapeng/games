@@ -235,8 +235,15 @@ canvas.addEventListener('touchstart', e => {
 });
 canvas.addEventListener('touchend', e => {
   // Start/restart game on tap in menu or game over
-  if (game.state === STATE.MENU || game.state === STATE.GAMEOVER) {
+  if (game.state === STATE.MENU) {
     handleStart(e);
+    return;
+  }
+  if (game.state === STATE.GAMEOVER) {
+    // Enforce cooldown to prevent instant restart when finger lifts after death
+    if (performance.now() - game.gameOverAt > 600) {
+      handleStart(e);
+    }
     return;
   }
 
@@ -257,12 +264,10 @@ canvas.addEventListener('touchend', e => {
 nitroBtn.addEventListener('touchstart', e => {
   e.preventDefault();
   e.stopPropagation();
-  keys[' '] = true;
-});
-nitroBtn.addEventListener('touchend', e => {
-  e.preventDefault();
-  e.stopPropagation();
-  keys[' '] = false;
+  // One-shot activation — avoids stuck-key bug on mobile
+  if (game.state === STATE.PLAYING && game.player.nitroCharges > 0 && !game.player.nitroActive) {
+    game.player.activateNitro();
+  }
 });
 
 // ============ AUDIO (simple oscillator-based) ============
@@ -1287,6 +1292,9 @@ class Game {
     // Input cooldowns
     this.laneInputCooldown = 0;
     this.nitroInputCooldown = 0;
+
+    // Prevent instant restart on mobile after game over
+    this.gameOverAt = 0;
   }
 
   start() {
@@ -1309,6 +1317,7 @@ class Game {
     this.maxCombo = 0;
     this.shakeAmount = 0;
     this.shakeDuration = 0;
+    this.gameOverAt = 0;
     this.startCountdown = 3; // 3-second countdown
     this.state = STATE.PLAYING;
     questionPanel.classList.remove('active');
@@ -1674,6 +1683,7 @@ class Game {
 
   gameOver() {
     this.state = STATE.GAMEOVER;
+    this.gameOverAt = performance.now(); // prevent instant restart on mobile
     if (this.score > this.bestScore) {
       this.bestScore = this.score;
       localStorage.setItem('studyrace_best', this.bestScore);
