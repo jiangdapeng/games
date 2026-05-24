@@ -22,6 +22,7 @@
           <div class="mode-tabs" id="modeTabs">
             <button class="mode-tab is-active" data-mode="text">拼文字</button>
             <button class="mode-tab" data-mode="image">拼图片</button>
+            <button class="mode-tab" data-mode="canvas">画板</button>
           </div>
         </div>
 
@@ -42,19 +43,39 @@
           <p class="field-hint">选择一张目标图案，照片会拼出它的形状（如爱心、人脸等）。</p>
         </div>
 
-        <div class="panel-block slider-block mode-image is-hidden">
+        <div class="panel-block mode-image is-hidden">
+          <label class="field-label">提取方法</label>
+          <div class="mode-tabs" id="segModeTabs">
+            <button class="mode-tab is-active" data-seg="luminance">亮度阈值</button>
+            <button class="mode-tab" data-seg="subject">主体提取</button>
+          </div>
+        </div>
+
+        <div class="panel-block slider-block mode-image seg-luminance is-hidden">
           <div class="slider-header">
             <label class="field-label" for="thresholdRange">亮度阈值</label>
             <span id="thresholdValue">128</span>
           </div>
           <input id="thresholdRange" type="range" min="0" max="255" step="5" value="128" />
+          <p class="field-hint">默认填充较暗区域（如白底上的图案），取消勾选则填充较亮区域。</p>
+        </div>
+
+        <div class="panel-block slider-block mode-image seg-subject is-hidden">
+          <div class="slider-header">
+            <label class="field-label" for="edgeSensitivityRange">边缘灵敏度</label>
+            <span id="edgeSensitivityValue">50</span>
+          </div>
+          <input id="edgeSensitivityRange" type="range" min="0" max="100" step="5" value="50" />
+          <p class="field-hint">灵敏度越低，提取的边缘越少（仅保留强边缘）；越高则保留更多细节。</p>
+        </div>
+
+        <div class="panel-block mode-image is-hidden">
           <div class="invert-row">
             <label class="invert-label">
               <input id="invertFillCheckbox" type="checkbox" checked />
-              <span>反转填充方向</span>
+              <span>反转填充方向（填充背景区域而非主体）</span>
             </label>
           </div>
-          <p class="field-hint">默认填充较暗区域（如白底上的图案），取消勾选则填充较亮区域。</p>
         </div>
 
         <div class="panel-block slider-block">
@@ -64,6 +85,18 @@
           </div>
           <input id="tileSizeRange" type="range" min="14" max="34" step="2" value="22" />
           <p class="field-hint">格子越小，拼图越精细；格子越大，单张照片细节越明显。</p>
+        </div>
+
+        <div class="panel-block slider-block mode-canvas is-hidden">
+          <div class="slider-header">
+            <label class="field-label" for="brushSizeRange">画笔粗细</label>
+            <span id="brushSizeValue">20 px</span>
+          </div>
+          <input id="brushSizeRange" type="range" min="4" max="60" step="2" value="20" />
+        </div>
+
+        <div class="panel-block mode-canvas is-hidden">
+          <p class="field-hint">画笔粗细影响手绘笔迹和形状描边宽度。形状和颜色工具在画布上方。</p>
         </div>
 
         <div class="panel-block slider-block mode-text">
@@ -77,6 +110,7 @@
         <div class="button-row">
           <button id="startButton" class="primary-button" type="button">开始拼接</button>
           <button id="resetButton" class="secondary-button" type="button">恢复网格</button>
+          <button id="exportButton" class="secondary-button" type="button">导出图片</button>
         </div>
 
         <p id="statusText" class="status-text">请先上传照片，然后点击开始。</p>
@@ -95,9 +129,26 @@
         </div>
 
         <section class="stage-frame">
+          <div class="draw-toolbar mode-canvas is-hidden" id="drawToolbar">
+            <div class="tool-group">
+              <button class="shape-btn is-active" data-tool="freehand" title="画笔">画笔</button>
+              <button class="shape-btn" data-tool="line" title="直线">直线</button>
+              <button class="shape-btn" data-tool="rect" title="矩形">矩形</button>
+              <button class="shape-btn" data-tool="circle" title="圆形">圆形</button>
+              <button class="shape-btn" data-tool="ellipse" title="椭圆">椭圆</button>
+              <button class="shape-btn" data-tool="triangle" title="三角">三角</button>
+            </div>
+            <div class="tool-divider"></div>
+            <input type="color" id="fillColorInput" value="#111111" title="填充颜色">
+            <div class="tool-divider"></div>
+            <button id="eraserToggle" class="shape-btn" data-tool="eraser" title="橡皮擦">橡皮</button>
+            <button id="clearCanvasBtn" class="shape-btn" data-tool="clear" title="清空画布">清空</button>
+          </div>
           <div class="scanlines" aria-hidden="true"></div>
           <div class="stage-grid" aria-hidden="true"></div>
           <div id="stage" class="stage"></div>
+          <canvas id="drawCanvas" class="draw-canvas is-hidden" width="800" height="600"></canvas>
+          <canvas id="previewCanvas" class="preview-canvas is-hidden" width="800" height="600"></canvas>
           <canvas id="glyphCanvas" class="hidden-canvas" width="1200" height="700"></canvas>
         </section>
       </main>
