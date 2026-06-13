@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>群体动物运动模拟器</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="stage">
+        <div class="topbar">
+          <div>
+            <h1>群体动物运动模拟器</h1>
+            <p>研究分离、对齐、凝聚和目标跟随如何共同形成鱼群与鸟群的队形。</p>
+          </div>
+          <div class="run-controls" aria-label="运行控制">
+            <button id="playPause" type="button" title="暂停或继续模拟">Pause</button>
+            <button id="reset" type="button" title="重新生成群体">Reset</button>
+          </div>
+        </div>
+
+        <div class="canvas-wrap">
+          <canvas id="world" width="1280" height="820"></canvas>
+          <div class="hud">
+            <span id="modeLabel">Fish</span>
+            <span id="speedMetric">速度 0</span>
+            <span id="densityMetric">邻居 0</span>
+            <span id="riskMetric">碰撞风险 0</span>
+          </div>
+        </div>
+      </section>
+
+      <aside class="panel" aria-label="模拟参数">
+        <section class="control-group">
+          <h2>场景</h2>
+          <div class="segmented" role="group" aria-label="动物类型">
+            <button class="active" data-preset="fish" type="button">鱼群</button>
+            <button data-preset="birds" type="button">鸟群</button>
+            <button data-preset="swarm" type="button">虫群</button>
+          </div>
+          <label class="toggle">
+            <input id="showForces" type="checkbox" checked />
+            <span>显示感知半径与方向</span>
+          </label>
+          <label class="toggle">
+            <input id="followPointer" type="checkbox" checked />
+            <span>跟随鼠标目标</span>
+          </label>
+        </section>
+
+        <section class="control-group">
+          <h2>个体规则</h2>
+          <label>
+            <span>数量 <output id="countOut">180</output></span>
+            <input id="count" type="range" min="30" max="420" step="10" value="180" />
+          </label>
+          <label>
+            <span>分离力 <output id="separationOut">1.45</output></span>
+            <input id="separation" type="range" min="0" max="3" step="0.05" value="1.45" />
+          </label>
+          <label>
+            <span>对齐力 <output id="alignmentOut">1.00</output></span>
+            <input id="alignment" type="range" min="0" max="3" step="0.05" value="1.00" />
+          </label>
+          <label>
+            <span>凝聚力 <output id="cohesionOut">0.82</output></span>
+            <input id="cohesion" type="range" min="0" max="3" step="0.05" value="0.82" />
+          </label>
+          <label>
+            <span>目标跟随 <output id="targetOut">0.38</output></span>
+            <input id="target" type="range" min="0" max="2" step="0.02" value="0.38" />
+          </label>
+        </section>
+
+        <section class="control-group">
+          <h2>感知与运动</h2>
+          <label>
+            <span>感知半径 <output id="perceptionOut">72</output></span>
+            <input id="perception" type="range" min="25" max="150" step="1" value="72" />
+          </label>
+          <label>
+            <span>避让距离 <output id="avoidOut">28</output></span>
+            <input id="avoid" type="range" min="10" max="70" step="1" value="28" />
+          </label>
+          <label>
+            <span>最大速度 <output id="speedOut">3.2</output></span>
+            <input id="speed" type="range" min="1" max="7" step="0.1" value="3.2" />
+          </label>
+          <label>
+            <span>转向能力 <output id="turnOut">0.060</output></span>
+            <input id="turn" type="range" min="0.015" max="0.18" step="0.005" value="0.060" />
+          </label>
+        </section>
+
+        <section class="notes">
+          <h2>观察指标</h2>
+          <p><strong>分离</strong>让个体在近距离互相排斥，降低碰撞风险。</p>
+          <p><strong>对齐</strong>让个体趋向邻居平均方向，队伍因此同向移动。</p>
+          <p><strong>凝聚</strong>让个体靠近邻居中心，群体不会散开。</p>
+        </section>
+      </aside>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>
